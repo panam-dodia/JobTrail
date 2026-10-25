@@ -391,3 +391,36 @@ select.sponsor-no {
   background: var(--yes-bg);
   color: var(--yes-text);
 }
+.picker-row {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.picker-row .list-item {
+  flex: 1;
+  min-width: 0;
+}
+.icon-button {
+  border: none;
+  background: none;
+  color: var(--muted);
+  padding: 6px 8px;
+}
+.icon-button:hover {
+  color: var(--no-text);
+}
+.row-actions {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+  justify-content: flex-end;
+  padding: 0 4px 6px;
+}
+.changes {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}

@@ -158,9 +158,13 @@ export function CompanyView({ company, companies, ctx, facts, onBack, onDeleted 
           <ul className="roles">
             {roles.map((r) => (
               <li key={r.id}>
-                <a href={r.url} target="_blank" rel="noreferrer">
-                  {r.title}
-                </a>
+                {r.url ? (
+                  <a href={r.url} target="_blank" rel="noreferrer">
+                    {r.title}
+                  </a>
+                ) : (
+                  <span>{r.title}</span>
+                )}
                 {applied(r.id, r.title) && <span className="tag">applied</span>}
               </li>
             ))}

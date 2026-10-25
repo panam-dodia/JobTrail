@@ -2,7 +2,8 @@ import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { parsePageContext } from '../lib/pageContext';
 import { db } from './index';
-import { addApplication, addNote, companyTimeline, createCompany, deleteCompany, findRole, linkPageToCompany, roleTitlesByCompany, saveRole } from './repo';
+import { addApplication, addNote, companyTimeline, createCompany, deleteCompany, findRole, linkPageToCompany, roleTitlesByCompany, saveRole, applyRepairs } from './repo';
+import { planRepairs } from '../lib/repair';
 
 beforeEach(async () => {
   await Promise.all(db.tables.map((t) => t.clear()));
@@ -83,5 +84,38 @@ describe('roleTitlesByCompany', () => {
     await addApplication({ companyId: stoa, roleTitle: 'mts', platform: 'yc', appliedAt: 0, status: 'applied', notes: '' });
     const map = await roleTitlesByCompany();
     expect(map.get(stoa)).toEqual(['MTS', 'Trader']);
+  });
+});
+
+describe('applyRepairs', () => {
+  it('turns the old broken entries into Stoa and David AI with their roles and history', async () => {
+    const mts = await createCompany({ name: 'Member of Technical Staff at Stoa' });
+    await createCompany({ name: 'Product Engineer, Full Stack at David AI' });
+    const trader = await createCompany({ name: 'Trader, Compute Markets at Stoa' });
+    const startup = await createCompany({ name: 'a Startup', ycSlug: 'stoa', sponsorship: 'yes' });
+    await saveRole(startup, { title: "Marketing at Stoa | Y Combinator's Work", url: 'https://w/jobs/1', source: 'yc' });
+    await addNote(trader, 'keep me');
+
+    await applyRepairs(planRepairs(await db.companies.toArray(), await db.roles.toArray()));
+
+    const companies = await db.companies.orderBy('name').toArray();
+    expect(companies.map((c) => c.name)).toEqual(['David AI', 'Stoa']);
+    const stoa = companies[1]!;
+    expect(stoa.id).toBe(mts);
+    expect(stoa).toMatchObject({ ycSlug: 'stoa', sponsorship: 'yes' });
+    expect((await roleTitlesByCompany()).get(stoa.id)?.sort()).toEqual(['Marketing', 'Member of Technical Staff', 'Trader, Compute Markets']);
+    expect(await db.notes.where('companyId').equals(stoa.id).count()).toBe(1);
+  });
+
+  it('collapses duplicate roles when merging', async () => {
+    const a = await createCompany({ name: 'Marketing at Stoa' });
+    const b = await createCompany({ name: 'Stoa' });
+    const roleId = await saveRole(b, { title: 'Marketing', url: 'u', source: 'yc' });
+    await addApplication({ companyId: a, platform: 'yc', appliedAt: 1, status: 'applied', notes: '' });
+    await applyRepairs(planRepairs(await db.companies.toArray(), await db.roles.toArray()));
+    expect(await db.companies.count()).toBe(1);
+    expect(await db.roles.count()).toBe(1);
+    expect((await findRole(b, 'Marketing'))?.id).toBe(roleId);
+    expect(await db.applications.where('companyId').equals(b).count()).toBe(1);
   });
 });

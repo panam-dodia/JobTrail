@@ -1,7 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useState } from 'react';
 import { db } from '../db';
-import { roleTitlesByCompany } from '../db/repo';
+import { deleteCompany, roleTitlesByCompany } from '../db/repo';
 import { matchByPage } from '../lib/match';
 import { parsePageContext } from '../lib/pageContext';
 import { mergeFacts } from '../lib/pageFacts';
@@ -10,6 +10,7 @@ import { CompanyForm } from './components/CompanyForm';
 import { CompanyPicker } from './components/CompanyPicker';
 import { CompanyView } from './components/CompanyView';
 import { NoMatchView } from './components/NoMatchView';
+import { RepairBanner } from './components/RepairBanner';
 import { useActiveTab } from './useActiveTab';
 import { usePageFacts } from './usePageFacts';
 
@@ -68,7 +69,8 @@ export function App() {
         <button className="primary" onClick={() => setAdding(true)}>
           + Add company
         </button>
-        <CompanyPicker companies={companies} roles={roles} onPick={(c) => open(c.id)} />
+        <RepairBanner />
+        <CompanyPicker companies={companies} roles={roles} onPick={(c) => open(c.id)} onDelete={(c) => void deleteCompany(c.id)} />
       </div>
     );
   } else if (matched) {

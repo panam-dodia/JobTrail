@@ -8,6 +8,7 @@ import type { PageFacts } from '../../lib/pageFacts';
 import { guessCompanyName, roleSource } from '../format';
 import { CompanyForm } from './CompanyForm';
 import { CompanyPicker } from './CompanyPicker';
+import { RepairBanner } from './RepairBanner';
 import { Timeline } from './Timeline';
 
 interface Props {
@@ -54,6 +55,7 @@ export function NoMatchView({ ctx, facts, tabTitle, companies, onOpenCompany }: 
 
   return (
     <div className="stack">
+      <RepairBanner />
       {ctx && (
         <section className="card">
           <p className="muted small">This page</p>

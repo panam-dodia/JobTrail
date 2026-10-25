@@ -1,4 +1,5 @@
 import type { PageContext } from '../lib/pageContext';
+import type { RepairPlan } from '../lib/repair';
 import { buildTimeline, type TimelineItem } from '../lib/timeline';
 import { db } from './index';
 import type { Application, Company, Outreach, Role } from './types';
@@ -143,4 +144,58 @@ export async function unseenEvents(): Promise<TimelineItem[]> {
   const events = await db.events.filter((e) => !e.seen).toArray();
   const roles = await db.roles.bulkGet(events.map((e) => e.roleId));
   return buildTimeline({ applications: [], outreach: [], notes: [], events, roles: roles.filter((r) => r !== undefined) });
+}
+
+/** Applies a plan from planRepairs: renames, role fixes, then merges duplicates into one company. */
+export async function applyRepairs(plan: RepairPlan): Promise<void> {
+  const tables = [db.companies, db.roles, db.applications, db.outreach, db.notes, db.events];
+  await db.transaction('rw', tables, async () => {
+    const now = Date.now();
+    for (const fix of plan.fixes) {
+      await db.companies.update(fix.companyId, { name: fix.to });
+      for (const r of fix.renameRoles) await db.roles.update(r.roleId, { title: r.title });
+      for (const title of fix.addRoles) {
+        await db.roles.add({ companyId: fix.companyId, title, url: '', source: 'careers_page', firstSeen: now, lastSeen: now, open: true });
+      }
+    }
+
+    for (const merge of plan.merges) {
+      const target = await db.companies.get(merge.into);
+      if (!target) continue;
+      // Keep any identifiers the merged entries had that the target lacks.
+      const changes: Partial<Company> = {};
+      for (const other of await db.companies.bulkGet(merge.from)) {
+        if (!other) continue;
+        changes.domain ??= target.domain ?? other.domain;
+        changes.ycSlug ??= target.ycSlug ?? other.ycSlug;
+        changes.ats ??= target.ats ?? other.ats;
+        if (target.sponsorship === 'unknown' && other.sponsorship !== 'unknown') changes.sponsorship ??= other.sponsorship;
+        changes.watching = (changes.watching ?? target.watching) || other.watching;
+      }
+      await db.companies.update(merge.into, changes);
+      for (const table of [db.roles, db.applications, db.outreach, db.notes, db.events] as const) {
+        await (table as typeof db.notes).where('companyId').anyOf(merge.from).modify({ companyId: merge.into });
+      }
+      await db.companies.bulkDelete(merge.from);
+      await dedupeRoles(merge.into);
+    }
+  });
+}
+
+/** Collapses same-titled roles into the oldest one and repoints anything that referenced the others. */
+async function dedupeRoles(companyId: number): Promise<void> {
+  const roles = (await db.roles.where('companyId').equals(companyId).toArray()).sort((a, b) => a.firstSeen - b.firstSeen || a.id - b.id);
+  const keep = new Map<string, Role>();
+  for (const r of roles) {
+    const key = normalizeTitle(r.title);
+    const kept = keep.get(key);
+    if (!kept) {
+      keep.set(key, r);
+      continue;
+    }
+    if (!kept.url && r.url) await db.roles.update(kept.id, { url: r.url });
+    await db.applications.where('roleId').equals(r.id).modify({ roleId: kept.id });
+    await db.events.where('roleId').equals(r.id).modify({ roleId: kept.id });
+    await db.roles.delete(r.id);
+  }
 }
