@@ -1,6 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useState } from 'react';
 import { db } from '../db';
+import { roleTitlesByCompany } from '../db/repo';
 import { matchByPage } from '../lib/match';
 import { parsePageContext } from '../lib/pageContext';
 import { CompanyForm } from './components/CompanyForm';
@@ -14,6 +15,7 @@ type Tab = 'page' | 'companies';
 export function App() {
   const tab = useActiveTab();
   const companies = useLiveQuery(() => db.companies.toArray(), []);
+  const roles = useLiveQuery(() => roleTitlesByCompany(), []);
   const [view, setView] = useState<Tab>('page');
   /** A company opened explicitly (from a list), overriding the page match. */
   const [openedId, setOpenedId] = useState<number | null>(null);
@@ -45,6 +47,7 @@ export function App() {
         company={opened}
         companies={companies}
         ctx={view === 'page' ? ctx : undefined}
+        tabTitle={view === 'page' ? tab.title : undefined}
         onBack={back}
         onDeleted={back}
       />
@@ -57,11 +60,11 @@ export function App() {
         <button className="primary" onClick={() => setAdding(true)}>
           + Add company
         </button>
-        <CompanyPicker companies={companies} onPick={(c) => open(c.id)} />
+        <CompanyPicker companies={companies} roles={roles} onPick={(c) => open(c.id)} />
       </div>
     );
   } else if (matched) {
-    content = <CompanyView key={matched.id} company={matched} companies={companies} ctx={ctx} onDeleted={back} />;
+    content = <CompanyView key={matched.id} company={matched} companies={companies} ctx={ctx} tabTitle={tab.title} onDeleted={back} />;
   } else {
     content = <NoMatchView key={tab.url} ctx={ctx} tabTitle={tab.title} companies={companies} onOpenCompany={open} />;
   }

@@ -1,9 +1,11 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useState } from 'react';
-import { linkPageToCompany, pageIdentifiers, recentActivity, unseenEvents } from '../../db/repo';
+import { linkPageToCompany, pageIdentifiers, recentActivity, saveRole, unseenEvents } from '../../db/repo';
 import type { Company } from '../../db/types';
+import { matchByName } from '../../lib/match';
 import type { PageContext } from '../../lib/pageContext';
-import { guessCompanyName } from '../format';
+import { parseJobTitle } from '../../lib/pageTitle';
+import { guessCompanyName, roleSource } from '../format';
 import { CompanyForm } from './CompanyForm';
 import { CompanyPicker } from './CompanyPicker';
 import { Timeline } from './Timeline';
@@ -24,9 +26,18 @@ export function NoMatchView({ ctx, tabTitle, companies, onOpenCompany }: Props) 
   const unseen = useLiveQuery(() => unseenEvents(), []);
   const companiesById = new Map(companies.map((c) => [c.id, c]));
   const hasIds = ctx ? Object.keys(pageIdentifiers(ctx)).length > 0 : false;
+  const guess = parseJobTitle(tabTitle);
+  const byName = guess.company ? matchByName(guess.company, companies) : { exact: [], candidates: [] };
+  const suggestions = [...byName.exact, ...byName.candidates];
+
+  /** Files the role from this page's title under the company. */
+  async function rememberRole(companyId: number) {
+    if (ctx && guess.role) await saveRole(companyId, { title: guess.role, url: ctx.url, source: roleSource(ctx) });
+  }
 
   async function chooseExisting(company: Company) {
     setMode('idle');
+    await rememberRole(company.id);
     if (ctx && hasIds) {
       const { conflicts } = await linkPageToCompany(company.id, ctx);
       if (conflicts.length) {
@@ -46,6 +57,25 @@ export function NoMatchView({ ctx, tabTitle, companies, onOpenCompany }: Props) 
         <section className="card">
           <p className="muted small">This page</p>
           <p className="host">{ctx.host}</p>
+          {guess.role && (
+            <p>
+              Role: <strong>{guess.role}</strong>
+            </p>
+          )}
+          {mode === 'idle' && suggestions.length > 0 && (
+            <div className="ask-inline">
+              <p>
+                This looks like <strong>{guess.company}</strong>. Is it one you're tracking?
+              </p>
+              <div className="row">
+                {suggestions.map((c) => (
+                  <button key={c.id} className="primary" onClick={() => void chooseExisting(c)}>
+                    Yes, {c.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {mode === 'idle' && (
             <>
               <p className="small">
@@ -84,8 +114,9 @@ export function NoMatchView({ ctx, tabTitle, companies, onOpenCompany }: Props) 
         <CompanyForm
           companies={companies}
           initial={{ name: guessCompanyName(ctx, tabTitle), ...(ctx ? pageIdentifiers(ctx) : {}) }}
-          onDone={(id) => {
+          onDone={async (id) => {
             setMode('idle');
+            await rememberRole(id);
             onOpenCompany(id);
           }}
           onPickExisting={(c) => void chooseExisting(c)}

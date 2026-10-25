@@ -1,9 +1,12 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useState } from 'react';
-import { addNote, companyTimeline, deleteCompany, updateCompany } from '../../db/repo';
-import type { Company, Outreach, Sponsorship } from '../../db/types';
+import { db } from '../../db';
+import { addNote, companyTimeline, deleteCompany, saveRole, updateCompany } from '../../db/repo';
+import type { Application, Company, Outreach, Sponsorship } from '../../db/types';
 import type { PageContext } from '../../lib/pageContext';
+import { parseJobTitle } from '../../lib/pageTitle';
 import { glance } from '../../lib/timeline';
+import { roleSource } from '../format';
 import { CompanyForm } from './CompanyForm';
 import { ApplicationForm, OutreachForm } from './LogForms';
 import { Timeline } from './Timeline';
@@ -12,17 +15,26 @@ interface Props {
   company: Company;
   companies: Company[];
   ctx?: PageContext;
+  tabTitle?: string;
   onBack?: () => void;
   onDeleted: () => void;
 }
 
 type Panel = 'none' | 'application' | 'outreach' | 'edit';
 
-export function CompanyView({ company, companies, ctx, onBack, onDeleted }: Props) {
+const sameTitle = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+export function CompanyView({ company, companies, ctx, tabTitle, onBack, onDeleted }: Props) {
   const items = useLiveQuery(() => companyTimeline(company.id), [company.id]);
+  const roles = useLiveQuery(() => db.roles.where('companyId').equals(company.id).reverse().sortBy('firstSeen'), [company.id]);
   const [panel, setPanel] = useState<Panel>('none');
   const outreach = (items ?? []).filter((i) => i.kind === 'outreach').map((i) => i.record as Outreach);
+  const applications = (items ?? []).filter((i) => i.kind === 'application').map((i) => i.record as Application);
   const g = glance(outreach);
+  const pageRole = ctx ? parseJobTitle(tabTitle).role : undefined;
+  const pageRoleSaved = !pageRole || (roles ?? []).some((r) => r.url === ctx?.url || sameTitle(r.title, pageRole));
+  const applied = (roleId: number, title: string) =>
+    applications.some((a) => a.roleId === roleId || (a.roleTitle && sameTitle(a.roleTitle, title)));
 
   if (panel === 'edit') {
     return (
@@ -96,8 +108,43 @@ export function CompanyView({ company, companies, ctx, onBack, onDeleted }: Prop
           </button>
         </div>
       )}
-      {panel === 'application' && <ApplicationForm companyId={company.id} ctx={ctx} onDone={() => setPanel('none')} />}
+      {panel === 'application' && (
+        <ApplicationForm companyId={company.id} ctx={ctx} defaultRole={pageRole} onDone={() => setPanel('none')} />
+      )}
       {panel === 'outreach' && <OutreachForm companyId={company.id} ctx={ctx} onDone={() => setPanel('none')} />}
+
+      <section>
+        <h3>Roles</h3>
+        {ctx && pageRole && !pageRoleSaved && (
+          <div className="ask-inline">
+            <p>
+              Role on this page: <strong>{pageRole}</strong>
+            </p>
+            <div className="row">
+              <button
+                className="primary"
+                onClick={() => saveRole(company.id, { title: pageRole, url: ctx.url, source: roleSource(ctx) })}
+              >
+                Save role
+              </button>
+            </div>
+          </div>
+        )}
+        {roles?.length ? (
+          <ul className="roles">
+            {roles.map((r) => (
+              <li key={r.id}>
+                <a href={r.url} target="_blank" rel="noreferrer">
+                  {r.title}
+                </a>
+                {applied(r.id, r.title) && <span className="tag">applied</span>}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          !pageRole && <p className="muted">No roles saved yet.</p>
+        )}
+      </section>
 
       <section>
         <h3>History</h3>

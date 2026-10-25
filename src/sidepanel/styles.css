@@ -343,3 +343,51 @@ select.sponsor-no {
 .list-item:hover {
   background: var(--surface);
 }
+.company-cell {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.company-name {
+  font-weight: 600;
+}
+.role-list {
+  display: flex;
+  flex-direction: column;
+  border-left: 2px solid var(--border);
+  padding-left: 8px;
+  margin-left: 2px;
+}
+.role {
+  color: var(--muted);
+}
+.ask-inline {
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.roles {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.roles li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+.tag {
+  font-size: 11px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--yes-bg);
+  color: var(--yes-text);
+}

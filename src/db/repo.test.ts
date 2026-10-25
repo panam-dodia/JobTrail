@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { parsePageContext } from '../lib/pageContext';
 import { db } from './index';
-import { addApplication, addNote, companyTimeline, createCompany, deleteCompany, linkPageToCompany } from './repo';
+import { addApplication, addNote, companyTimeline, createCompany, deleteCompany, findRole, linkPageToCompany, roleTitlesByCompany, saveRole } from './repo';
 
 beforeEach(async () => {
   await Promise.all(db.tables.map((t) => t.clear()));
@@ -49,5 +49,39 @@ describe('deleteCompany', () => {
     expect(await db.companies.count()).toBe(1);
     expect(await companyTimeline(id)).toEqual([]);
     expect(await companyTimeline(other)).toHaveLength(1);
+  });
+});
+
+describe('saveRole', () => {
+  it('adds a role once and refreshes it when seen again', async () => {
+    const id = await createCompany({ name: 'Stoa' });
+    const role = { title: 'Member of Technical Staff', url: 'https://x/jobs/1', source: 'yc' as const };
+    const first = await saveRole(id, role);
+    const again = await saveRole(id, { ...role, title: 'member of technical staff' });
+    expect(again).toBe(first);
+    expect(await db.roles.count()).toBe(1);
+  });
+
+  it('keeps different roles and companies apart', async () => {
+    const stoa = await createCompany({ name: 'Stoa' });
+    const other = await createCompany({ name: 'David AI' });
+    await saveRole(stoa, { title: 'MTS', url: 'u1', source: 'yc' });
+    await saveRole(stoa, { title: 'Trader', url: 'u2', source: 'yc' });
+    await saveRole(other, { title: 'MTS', url: 'u3', source: 'yc' });
+    expect(await db.roles.where('companyId').equals(stoa).count()).toBe(2);
+    expect((await findRole(stoa, undefined, 'u2'))?.title).toBe('Trader');
+    expect(await findRole(other, 'Trader')).toBeUndefined();
+  });
+});
+
+describe('roleTitlesByCompany', () => {
+  it('groups saved roles and typed application titles per company without duplicates', async () => {
+    const stoa = await createCompany({ name: 'Stoa' });
+    const roleId = await saveRole(stoa, { title: 'MTS', url: 'u1', source: 'yc' });
+    await addApplication({ companyId: stoa, roleId, platform: 'yc', appliedAt: 1, status: 'applied', notes: '' });
+    await addApplication({ companyId: stoa, roleTitle: 'Trader', platform: 'yc', appliedAt: 1, status: 'applied', notes: '' });
+    await addApplication({ companyId: stoa, roleTitle: 'mts', platform: 'yc', appliedAt: 0, status: 'applied', notes: '' });
+    const map = await roleTitlesByCompany();
+    expect(map.get(stoa)).toEqual(['MTS', 'Trader']);
   });
 });

@@ -1,5 +1,6 @@
-import type { OutreachChannel, Platform } from '../db/types';
+import type { OutreachChannel, Platform, RoleSource } from '../db/types';
 import type { PageContext } from '../lib/pageContext';
+import { parseJobTitle } from '../lib/pageTitle';
 
 export function fmtDate(ms: number): string {
   const d = new Date(ms);
@@ -68,10 +69,17 @@ export function defaultChannel(ctx?: PageContext): OutreachChannel {
 
 const titleCase = (s: string) => s.replace(/[-_]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
+export function roleSource(ctx?: PageContext): RoleSource {
+  const p = defaultPlatform(ctx);
+  return p === 'email' || p === 'other' ? 'careers_page' : p;
+}
+
 /** A starting point for the company name field; the user always confirms it. */
 export function guessCompanyName(ctx?: PageContext, tabTitle?: string): string {
   if (ctx?.ycSlug) return titleCase(ctx.ycSlug);
   if (ctx?.ats) return titleCase(ctx.ats.token);
+  const fromTitle = parseJobTitle(tabTitle).company;
+  if (fromTitle) return fromTitle;
   if (ctx?.domain) {
     const label = ctx.domain.split('.').find((p) => !['www', 'careers', 'jobs', 'apply'].includes(p));
     if (label) return titleCase(label);

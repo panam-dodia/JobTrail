@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { addApplication, addOutreach } from '../../db/repo';
+import { addApplication, addOutreach, findRole } from '../../db/repo';
 import {
   APPLICATION_STATUSES,
   OUTREACH_CHANNELS,
@@ -19,8 +19,8 @@ interface Props {
   onDone: () => void;
 }
 
-export function ApplicationForm({ companyId, ctx, onDone }: Props) {
-  const [roleTitle, setRoleTitle] = useState('');
+export function ApplicationForm({ companyId, ctx, defaultRole, onDone }: Props & { defaultRole?: string }) {
+  const [roleTitle, setRoleTitle] = useState(defaultRole ?? '');
   const [platform, setPlatform] = useState<Platform>(defaultPlatform(ctx));
   const [date, setDate] = useState(toDateInput(Date.now()));
   const [status, setStatus] = useState<ApplicationStatus>('applied');
@@ -31,9 +31,13 @@ export function ApplicationForm({ companyId, ctx, onDone }: Props) {
       className="card form"
       onSubmit={async (e) => {
         e.preventDefault();
+        const title = roleTitle.trim();
+        // Link to a saved role with the same title, if there is one.
+        const role = title ? await findRole(companyId, title) : undefined;
         await addApplication({
           companyId,
-          roleTitle: roleTitle.trim() || undefined,
+          roleId: role?.id,
+          roleTitle: title || undefined,
           platform,
           appliedAt: fromDateInput(date),
           status,

@@ -1,7 +1,7 @@
 import type { PageContext } from '../lib/pageContext';
 import { buildTimeline, type TimelineItem } from '../lib/timeline';
 import { db } from './index';
-import type { Application, Company, Outreach } from './types';
+import type { Application, Company, Outreach, Role } from './types';
 
 export type NewCompany = Pick<Company, 'name'> & Partial<Omit<Company, 'id' | 'name' | 'createdAt'>>;
 
@@ -72,6 +72,45 @@ export async function deleteCompany(id: number): Promise<void> {
     ]);
     await db.companies.delete(id);
   });
+}
+
+/** A company's role with the same URL or the same title, if one is already saved. */
+export async function findRole(companyId: number, title?: string, url?: string): Promise<Role | undefined> {
+  const key = title ? normalizeTitle(title) : undefined;
+  const roles = await db.roles.where('companyId').equals(companyId).toArray();
+  return roles.find((r) => r.url === url) ?? (key ? roles.find((r) => normalizeTitle(r.title) === key) : undefined);
+}
+
+const normalizeTitle = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+/** Saves a role under a company, or refreshes lastSeen if it's already there. */
+export async function saveRole(companyId: number, role: Pick<Role, 'title' | 'url' | 'source'>): Promise<number> {
+  const now = Date.now();
+  const existing = await findRole(companyId, role.title, role.url);
+  if (existing) {
+    await db.roles.update(existing.id, { lastSeen: now, open: true });
+    return existing.id;
+  }
+  return db.roles.add({ companyId, ...role, title: role.title.trim(), firstSeen: now, lastSeen: now, open: true });
+}
+
+/** Role titles per company, newest first: saved roles plus titles typed into applications. */
+export async function roleTitlesByCompany(): Promise<Map<number, string[]>> {
+  const [roles, applications] = await Promise.all([db.roles.toArray(), db.applications.toArray()]);
+  const entries = [
+    ...roles.map((r) => ({ companyId: r.companyId, title: r.title, at: r.firstSeen })),
+    ...applications.flatMap((a) => (a.roleTitle && a.roleId === undefined ? [{ companyId: a.companyId, title: a.roleTitle, at: a.appliedAt }] : [])),
+  ].sort((a, b) => b.at - a.at);
+
+  const byCompany = new Map<number, string[]>();
+  const seen = new Set<string>();
+  for (const e of entries) {
+    const key = `${e.companyId}:${normalizeTitle(e.title)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    byCompany.set(e.companyId, [...(byCompany.get(e.companyId) ?? []), e.title]);
+  }
+  return byCompany;
 }
 
 export const addApplication = (a: Omit<Application, 'id'>) => db.applications.add(a);
