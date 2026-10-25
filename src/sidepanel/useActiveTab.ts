@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 export interface ActiveTab {
+  id?: number;
   url?: string;
   title?: string;
 }
@@ -14,7 +15,7 @@ export function useActiveTab(): ActiveTab {
 
     const refresh = async () => {
       const [t] = await chrome.tabs.query(windowId === undefined ? { active: true, currentWindow: true } : { active: true, windowId });
-      setTab({ url: t?.url, title: t?.title });
+      setTab({ id: t?.id, url: t?.url, title: t?.title });
     };
     const onActivated = (info: chrome.tabs.OnActivatedInfo) => {
       if (info.windowId === windowId) void refresh();

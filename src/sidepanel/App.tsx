@@ -4,11 +4,14 @@ import { db } from '../db';
 import { roleTitlesByCompany } from '../db/repo';
 import { matchByPage } from '../lib/match';
 import { parsePageContext } from '../lib/pageContext';
+import { mergeFacts } from '../lib/pageFacts';
+import { parseJobTitle } from '../lib/pageTitle';
 import { CompanyForm } from './components/CompanyForm';
 import { CompanyPicker } from './components/CompanyPicker';
 import { CompanyView } from './components/CompanyView';
 import { NoMatchView } from './components/NoMatchView';
 import { useActiveTab } from './useActiveTab';
+import { usePageFacts } from './usePageFacts';
 
 type Tab = 'page' | 'companies';
 
@@ -20,6 +23,7 @@ export function App() {
   /** A company opened explicitly (from a list), overriding the page match. */
   const [openedId, setOpenedId] = useState<number | null>(null);
   const [adding, setAdding] = useState(false);
+  const scraped = usePageFacts(tab.id, tab.url, tab.title);
 
   // Navigating to another page goes back to that page's context.
   useEffect(() => {
@@ -29,7 +33,11 @@ export function App() {
 
   if (!companies) return <main className="app muted">Loading…</main>;
 
-  const ctx = tab.url ? parsePageContext(tab.url) : undefined;
+  const fromTitle = parseJobTitle(tab.title);
+  const facts = mergeFacts({ companyName: fromTitle.company, roleTitle: fromTitle.role }, scraped);
+  const pageCtx = tab.url ? parsePageContext(tab.url) : undefined;
+  // Identifiers read off the page (e.g. the YC slug on a WaaS job page) count for matching too.
+  const ctx = pageCtx && { ...pageCtx, ycSlug: pageCtx.ycSlug ?? facts.ycSlug, ats: pageCtx.ats ?? facts.ats };
   const matched = ctx ? matchByPage(ctx, companies) : undefined;
   const opened = openedId !== null ? companies.find((c) => c.id === openedId) : undefined;
 
@@ -47,7 +55,7 @@ export function App() {
         company={opened}
         companies={companies}
         ctx={view === 'page' ? ctx : undefined}
-        tabTitle={view === 'page' ? tab.title : undefined}
+        facts={view === 'page' ? facts : undefined}
         onBack={back}
         onDeleted={back}
       />
@@ -64,9 +72,9 @@ export function App() {
       </div>
     );
   } else if (matched) {
-    content = <CompanyView key={matched.id} company={matched} companies={companies} ctx={ctx} tabTitle={tab.title} onDeleted={back} />;
+    content = <CompanyView key={matched.id} company={matched} companies={companies} ctx={ctx} facts={facts} onDeleted={back} />;
   } else {
-    content = <NoMatchView key={tab.url} ctx={ctx} tabTitle={tab.title} companies={companies} onOpenCompany={open} />;
+    content = <NoMatchView key={tab.url} ctx={ctx} facts={facts} tabTitle={tab.title} companies={companies} onOpenCompany={open} />;
   }
 
   return (

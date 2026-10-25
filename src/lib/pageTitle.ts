@@ -3,20 +3,22 @@ export interface TitleGuess {
   role?: string;
 }
 
-// " | Y Combinator", " - LinkedIn", etc. appended by the job sites.
-const SITE_SUFFIX = /\s+[|·–—-]\s+(y combinator|work at a startup|linkedin|glassdoor[^|]*|greenhouse|lever|ashby)\s*$/i;
-const YC_BATCH = /\s*\(yc [a-z]\d{2,4}\)\s*$/i;
+// " - LinkedIn" etc. appended by job sites with a dash; " | <site>" is cut off wholesale.
+const SITE_SUFFIX = /\s+[·–—-]\s+(y combinator|work at a startup|linkedin|glassdoor[^-]*|greenhouse|lever|ashby)\s*$/i;
+/** "Stoa (S26)", "Stoa (YC W24)". */
+export const YC_BATCH = /\s*\((?:yc )?[swfx]\d{2,4}\)\s*$/i;
 // "Careers at Stripe" names a company, not a role.
 const GENERIC_ROLE = /^(careers?|jobs?|open (roles|positions)|join us|work (with|at) us|life|working)$/i;
 
 /**
  * Pulls the company and role out of a job page title, e.g.
- * "Member of Technical Staff at Stoa | Y Combinator" -> { company: 'Stoa', role: 'Member of Technical Staff' }.
+ * "Marketing at Stoa | Y Combinator's Work at a Startup" -> { company: 'Stoa', role: 'Marketing' }.
  * Only a guess for prefilling fields; the user confirms before anything is saved.
  */
 export function parseJobTitle(raw?: string): TitleGuess {
   if (!raw) return {};
-  let t = raw.replace(/\s+/g, ' ').trim();
+  // Site names come after the first " | " and can contain " at " themselves ("Work at a Startup").
+  let t = (raw.replace(/\s+/g, ' ').split(' | ')[0] ?? '').trim();
   for (let prev = ''; prev !== t; ) {
     prev = t;
     t = t.replace(SITE_SUFFIX, '').trim();
@@ -35,7 +37,7 @@ export function parseJobTitle(raw?: string): TitleGuess {
 }
 
 function clean(role: string | undefined, company: string | undefined): TitleGuess {
-  const c = company?.split(' | ')[0]?.replace(YC_BATCH, '').trim();
+  const c = company?.replace(YC_BATCH, '').trim();
   if (!c) return {};
   const r = role?.trim();
   return { company: c, ...(r && !GENERIC_ROLE.test(r) && { role: r }) };

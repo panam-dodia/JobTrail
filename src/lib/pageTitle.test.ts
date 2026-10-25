@@ -5,6 +5,9 @@ describe('parseJobTitle', () => {
   it.each([
     ['Member of Technical Staff at Stoa', 'Stoa', 'Member of Technical Staff'],
     ['Member of Technical Staff at Stoa | Y Combinator', 'Stoa', 'Member of Technical Staff'],
+    ["Marketing at Stoa | Y Combinator's Work at a Startup", 'Stoa', 'Marketing'],
+    ['Marketing at Stoa (S26) | Work at a Startup', 'Stoa', 'Marketing'],
+    ['Backend Engineer at Acme - LinkedIn', 'Acme', 'Backend Engineer'],
     ['Product Engineer, Full Stack at David AI | Work at a Startup', 'David AI', 'Product Engineer, Full Stack'],
     ['Trader, Compute Markets at Stoa (YC S24)', 'Stoa', 'Trader, Compute Markets'],
     ['Job Application for Backend Engineer at Acme', 'Acme', 'Backend Engineer'],

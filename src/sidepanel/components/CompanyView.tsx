@@ -4,7 +4,7 @@ import { db } from '../../db';
 import { addNote, companyTimeline, deleteCompany, saveRole, updateCompany } from '../../db/repo';
 import type { Application, Company, Outreach, Sponsorship } from '../../db/types';
 import type { PageContext } from '../../lib/pageContext';
-import { parseJobTitle } from '../../lib/pageTitle';
+import type { PageFacts } from '../../lib/pageFacts';
 import { glance } from '../../lib/timeline';
 import { roleSource } from '../format';
 import { CompanyForm } from './CompanyForm';
@@ -15,7 +15,7 @@ interface Props {
   company: Company;
   companies: Company[];
   ctx?: PageContext;
-  tabTitle?: string;
+  facts?: PageFacts;
   onBack?: () => void;
   onDeleted: () => void;
 }
@@ -24,17 +24,30 @@ type Panel = 'none' | 'application' | 'outreach' | 'edit';
 
 const sameTitle = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
-export function CompanyView({ company, companies, ctx, tabTitle, onBack, onDeleted }: Props) {
+export function CompanyView({ company, companies, ctx, facts, onBack, onDeleted }: Props) {
   const items = useLiveQuery(() => companyTimeline(company.id), [company.id]);
   const roles = useLiveQuery(() => db.roles.where('companyId').equals(company.id).reverse().sortBy('firstSeen'), [company.id]);
   const [panel, setPanel] = useState<Panel>('none');
   const outreach = (items ?? []).filter((i) => i.kind === 'outreach').map((i) => i.record as Outreach);
   const applications = (items ?? []).filter((i) => i.kind === 'application').map((i) => i.record as Application);
   const g = glance(outreach);
-  const pageRole = ctx ? parseJobTitle(tabTitle).role : undefined;
+  const pageRole = ctx ? facts?.roleTitle : undefined;
   const pageRoleSaved = !pageRole || (roles ?? []).some((r) => r.url === ctx?.url || sameTitle(r.title, pageRole));
   const applied = (roleId: number, title: string) =>
     applications.some((a) => a.roleId === roleId || (a.roleTitle && sameTitle(a.roleTitle, title)));
+  // Details on the page that this company is still missing. Never overwrites what's already set.
+  const fill: Partial<Company> = {
+    ...(facts?.sponsorship && company.sponsorship === 'unknown' && { sponsorship: facts.sponsorship }),
+    ...(facts?.domain && !company.domain && { domain: facts.domain }),
+    ...(facts?.ycSlug && !company.ycSlug && { ycSlug: facts.ycSlug }),
+    ...(facts?.ats && !company.ats && { ats: facts.ats }),
+  };
+  const fillLabels = [
+    fill.sponsorship && `visa sponsorship: ${fill.sponsorship}`,
+    fill.domain && `website: ${fill.domain}`,
+    fill.ycSlug && `YC slug: ${fill.ycSlug}`,
+    fill.ats && `job board: ${fill.ats.type}/${fill.ats.token}`,
+  ].filter(Boolean);
 
   if (panel === 'edit') {
     return (
@@ -90,6 +103,17 @@ export function CompanyView({ company, companies, ctx, tabTitle, onBack, onDelet
           <p className="muted small">Add a job board token to get new-role alerts for this company.</p>
         )}
       </header>
+
+      {fillLabels.length > 0 && (
+        <div className="ask-inline">
+          <p>From this page: {fillLabels.join(', ')}</p>
+          <div className="row">
+            <button className="primary" onClick={() => updateCompany(company.id, fill)}>
+              Fill in
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="glance">
         <span className={g.ycMessaged ? 'chip yes' : 'chip'}>YC message sent: {g.ycMessaged ? 'yes' : 'no'}</span>

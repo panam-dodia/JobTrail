@@ -11,4 +11,12 @@ export default defineManifest({
   background: { service_worker: 'src/background/index.ts', type: 'module' },
   // `tabs` lets the side panel read the active tab's URL so it can match it to a company.
   permissions: ['sidePanel', 'tabs', 'storage'],
+  // Read-only page readers, one per site (see src/sites/).
+  content_scripts: [
+    {
+      matches: ['https://www.workatastartup.com/*', 'https://workatastartup.com/*'],
+      js: ['src/sites/waas/content.ts'],
+      run_at: 'document_idle',
+    },
+  ],
 });

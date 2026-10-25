@@ -4,7 +4,7 @@ import { linkPageToCompany, pageIdentifiers, recentActivity, saveRole, unseenEve
 import type { Company } from '../../db/types';
 import { matchByName } from '../../lib/match';
 import type { PageContext } from '../../lib/pageContext';
-import { parseJobTitle } from '../../lib/pageTitle';
+import type { PageFacts } from '../../lib/pageFacts';
 import { guessCompanyName, roleSource } from '../format';
 import { CompanyForm } from './CompanyForm';
 import { CompanyPicker } from './CompanyPicker';
@@ -12,6 +12,7 @@ import { Timeline } from './Timeline';
 
 interface Props {
   ctx?: PageContext;
+  facts: PageFacts;
   tabTitle?: string;
   companies: Company[];
   onOpenCompany: (id: number) => void;
@@ -19,14 +20,14 @@ interface Props {
 
 type Mode = 'idle' | 'pick' | 'add';
 
-export function NoMatchView({ ctx, tabTitle, companies, onOpenCompany }: Props) {
+export function NoMatchView({ ctx, facts, tabTitle, companies, onOpenCompany }: Props) {
   const [mode, setMode] = useState<Mode>('idle');
   const [notice, setNotice] = useState<{ text: string; companyId: number } | null>(null);
   const recent = useLiveQuery(() => recentActivity(20), []);
   const unseen = useLiveQuery(() => unseenEvents(), []);
   const companiesById = new Map(companies.map((c) => [c.id, c]));
   const hasIds = ctx ? Object.keys(pageIdentifiers(ctx)).length > 0 : false;
-  const guess = parseJobTitle(tabTitle);
+  const guess = { company: facts.companyName, role: facts.roleTitle };
   const byName = guess.company ? matchByName(guess.company, companies) : { exact: [], candidates: [] };
   const suggestions = [...byName.exact, ...byName.candidates];
 
@@ -113,7 +114,12 @@ export function NoMatchView({ ctx, tabTitle, companies, onOpenCompany }: Props) 
       {mode === 'add' && (
         <CompanyForm
           companies={companies}
-          initial={{ name: guessCompanyName(ctx, tabTitle), ...(ctx ? pageIdentifiers(ctx) : {}) }}
+          initial={{
+            name: facts.companyName ?? guessCompanyName(ctx, tabTitle),
+            ...(ctx ? pageIdentifiers(ctx) : {}),
+            ...(facts.domain && { domain: facts.domain }),
+            ...(facts.sponsorship && { sponsorship: facts.sponsorship }),
+          }}
           onDone={async (id) => {
             setMode('idle');
             await rememberRole(id);
