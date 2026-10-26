@@ -36,14 +36,23 @@ function firstOther(els: Element[], own?: string): Person | undefined {
 }
 
 function toFacts(person: Person, subject?: string | null): PageFacts {
-  const facts: PageFacts = { personEmail: person.email };
-  if (person.name) facts.personName = person.name;
+  const [local = '', domain] = person.email.split('@');
+  // Gmail often shows a recipient only by address; "alexis.m@..." still reads as "Alexis M".
+  const facts: PageFacts = { personEmail: person.email, personName: person.name ?? titleCase(local.replace(/[._+]+/g, ' ')) };
   const s = clean(subject);
   if (s) facts.emailSubject = s;
-  const domain = person.email.split('@')[1];
   if (domain && !GMAIL.freeDomains.includes(domain)) {
     facts.domain = domain;
-    facts.companyName = titleCase(domain.split('.')[0] ?? '');
+    facts.companyName = titleCase(companyFromDomain(domain));
   }
   return facts;
+}
+
+/** "withbasis.co" -> "basis", "acmehq.com" -> "acme". */
+export function companyFromDomain(domain: string): string {
+  let label = domain.split('.')[0] ?? '';
+  const keep = (s: string) => (s.length >= GMAIL.minCompanyLength ? s : label);
+  for (const p of GMAIL.domainPrefixes) if (label.startsWith(p)) label = keep(label.slice(p.length));
+  for (const s of GMAIL.domainSuffixes) if (label.endsWith(s)) label = keep(label.slice(0, -s.length));
+  return label;
 }

@@ -21,6 +21,8 @@ describe('detectPageKind', () => {
     ['https://boards.greenhouse.io/acme/jobs/123', 'job'],
     ['https://boards.greenhouse.io/acme', 'company'],
     ['https://ats.rippling.com/acme/jobs', 'company'],
+    ['https://app.dover.com/apply/acme/3f2a9c', 'job'],
+    ['https://app.dover.com/jobs/acme', 'company'],
     ['https://acme.bamboohr.com/careers/12', 'job'],
     ['https://acme.bamboohr.com/careers', 'company'],
     ['https://www.glassdoor.com/job-listing/engineer-acme-JV_123.htm', 'job'],

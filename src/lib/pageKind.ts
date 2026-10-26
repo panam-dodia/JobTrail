@@ -52,12 +52,15 @@ export function detectPageKind(ctx?: PageContext): PageKind {
     case 'other':
       return 'other';
     default: {
-      // Hosted job boards: the board is one level deep (jobs.gem.com/ultra, acme.bamboohr.com/careers),
-      // a single job is below it (jobs.gem.com/ultra/<id>). Embedded Greenhouse jobs carry ?gh_jid=.
+      // Hosted job boards: a single job sits below the company's board (jobs.gem.com/ultra/<id>,
+      // app.dover.com/apply/acme/<id>); the board itself is a listing. Embedded Greenhouse jobs carry ?gh_jid=.
       if (!ctx.ats) return 'other';
-      const last = parts[parts.length - 1];
       if (url.searchParams.has('gh_jid')) return 'job';
-      return parts.length >= 2 && last && !LISTING_PARTS.has(last) ? 'job' : 'company';
+      const at = parts.indexOf(ctx.ats.token);
+      // Subdomain boards (acme.bamboohr.com/careers/12) have the company in the host, not the path.
+      const below = at >= 0 ? parts.slice(at + 1) : parts.slice(1);
+      const last = below[below.length - 1];
+      return last && !LISTING_PARTS.has(last) ? 'job' : 'company';
     }
   }
 }

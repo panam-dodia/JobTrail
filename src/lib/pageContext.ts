@@ -7,7 +7,7 @@ export type Site = 'waas' | 'yc' | 'linkedin' | 'glassdoor' | 'gmail' | JobBoard
  * the first path segment (jobs.gem.com/ultra/...) or the subdomain (ultra.bamboohr.com).
  * These hosts are never a company's own domain.
  */
-export const BOARD_HOSTS: { type: JobBoard; hosts: string[]; token: 'path' | 'subdomain' }[] = [
+export const BOARD_HOSTS: { type: JobBoard; hosts: string[]; token: 'path' | 'subdomain'; skip?: string[] }[] = [
   { type: 'lever', hosts: ['jobs.lever.co', 'jobs.eu.lever.co'], token: 'path' },
   { type: 'ashby', hosts: ['jobs.ashbyhq.com'], token: 'path' },
   { type: 'gem', hosts: ['jobs.gem.com'], token: 'path' },
@@ -18,6 +18,8 @@ export const BOARD_HOSTS: { type: JobBoard; hosts: string[]; token: 'path' | 'su
   { type: 'recruitee', hosts: ['recruitee.com'], token: 'subdomain' },
   { type: 'breezy', hosts: ['breezy.hr'], token: 'subdomain' },
   { type: 'teamtailor', hosts: ['teamtailor.com'], token: 'subdomain' },
+  // app.dover.com/apply/<company>/<id>, app.dover.com/jobs/<company>
+  { type: 'dover', hosts: ['app.dover.com'], token: 'path', skip: ['apply', 'jobs'] },
 ];
 const NOT_COMPANY_SUBDOMAINS = new Set(['www', 'app', 'api', 'help', 'support', 'jobs', 'careers']);
 
@@ -38,15 +40,13 @@ function hostIs(host: string, base: string): boolean {
   return host === base || host.endsWith(`.${base}`);
 }
 
-function firstSegment(pathname: string): string | undefined {
-  const seg = pathname.split('/').filter(Boolean)[0];
-  return seg ? decodeURIComponent(seg).toLowerCase() : undefined;
-}
-
 function findBoard(host: string, pathname: string): { type: JobBoard; token?: string } | undefined {
   for (const board of BOARD_HOSTS) {
     for (const h of board.hosts) {
-      if (board.token === 'path' && host === h) return { type: board.type, token: firstSegment(pathname) };
+      if (board.token === 'path' && host === h) {
+        const parts = pathname.split('/').filter(Boolean).map((p) => decodeURIComponent(p).toLowerCase());
+        return { type: board.type, token: parts.find((p) => !board.skip?.includes(p)) };
+      }
       if (board.token === 'subdomain' && hostIs(host, h)) {
         const sub = host === h ? undefined : host.slice(0, -h.length - 1).split('.').pop();
         return { type: board.type, token: sub && !NOT_COMPANY_SUBDOMAINS.has(sub) ? sub : undefined };

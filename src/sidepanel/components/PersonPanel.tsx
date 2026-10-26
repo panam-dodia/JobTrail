@@ -7,6 +7,7 @@ import { matchByName } from '../../lib/match';
 import type { PageContext } from '../../lib/pageContext';
 import type { PageFacts } from '../../lib/pageFacts';
 import { CHANNEL_LABELS, defaultChannel, fmtDate, label } from '../format';
+import { StatusSelect, outreachStatusLabel } from './Activity';
 
 interface Props {
   facts: PageFacts;
@@ -15,15 +16,23 @@ interface Props {
   /** Set when the page already matched a company; the company field is hidden. */
   company?: Company;
   onLogged: (companyId: number) => void;
+  /** Opens a company from the already-logged list. */
+  onOpenCompany?: (companyId: number) => void;
 }
 
-const CONNECTION_LABELS = { connected: 'Connected', pending: 'Request sent', none: 'Not connected' } as const;
+const SHORT_CHANNEL = { linkedin_connection: 'Request', linkedin_message: 'Message', yc_message: 'YC message', email: 'Email' } as const;
+
+const CONNECTION = {
+  connected: { label: 'Connected', className: 'chip yes' },
+  pending: { label: 'Request sent', className: 'chip pending' },
+  none: { label: 'Not connected', className: 'chip' },
+} as const;
 
 /**
  * The person on a LinkedIn profile, message thread or email: what's already logged with them, and
  * a form, filled in from the page, that logs outreach under their company (created if new).
  */
-export function PersonPanel({ facts, ctx, companies, company, onLogged }: Props) {
+export function PersonPanel({ facts, ctx, companies, company, onLogged, onOpenCompany }: Props) {
   const email = facts.personEmail;
   const contact = facts.profileUrl ?? (email ? `mailto:${email}` : undefined);
   const logged = useLiveQuery(() => findOutreachByPerson(facts.profileUrl, email), [facts.profileUrl, email]);
@@ -31,47 +40,50 @@ export function PersonPanel({ facts, ctx, companies, company, onLogged }: Props)
   const [showForm, setShowForm] = useState(false);
 
   return (
-    <section className="card">
-      <p>
-        <strong>{facts.personName}</strong>
-        {facts.personTitle && <span className="muted"> · {facts.personTitle}</span>}
-      </p>
+    <section className="card person">
+      <div>
+        <h2 className="person-name">{facts.personName}</h2>
+        {facts.personTitle && <p className="muted">{facts.personTitle}</p>}
+      </div>
       <div className="glance">
-        {facts.connection && (
-          <span className={facts.connection === 'none' ? 'chip' : 'chip yes'}>{CONNECTION_LABELS[facts.connection]}</span>
-        )}
+        {facts.connection && <span className={CONNECTION[facts.connection].className}>{CONNECTION[facts.connection].label}</span>}
         {email && <span className="chip">{email}</span>}
         {facts.location && <span className="chip">{facts.location}</span>}
       </div>
 
       {!!logged?.length && (
-        <div className="ask-inline">
-          <p className="small">Already logged:</p>
-          <ul className="plain">
-            {logged.map((o) => (
-              <li key={o.id} className="row">
-                <span className="grow small">
-                  {CHANNEL_LABELS[o.channel]} · {fmtDate(o.sentAt)}
-                  {companiesById.get(o.companyId) && <> · {displayName(companiesById.get(o.companyId)!)}</>}
-                </span>
-                <select
-                  value={o.status}
-                  aria-label="Status"
-                  onChange={(e) => void updateOutreach(o.id, { status: e.target.value as OutreachStatus })}
-                >
-                  {OUTREACH_STATUSES.map((s) => (
-                    <option key={s} value={s}>
-                      {label(s)}
-                    </option>
-                  ))}
-                </select>
-              </li>
-            ))}
+        <div className="section">
+          <h3 className="section-title">Already logged</h3>
+          <ul className="list">
+            {logged.map((o) => {
+              const co = companiesById.get(o.companyId);
+              return (
+                <li key={o.id} className="list-row">
+                  <StatusSelect
+                    value={o.status}
+                    options={OUTREACH_STATUSES}
+                    labelOf={(s) => outreachStatusLabel(o, s)}
+                    onChange={(s) => updateOutreach(o.id, { status: s })}
+                  />
+                  <span className="grow small">
+                    {SHORT_CHANNEL[o.channel]} <span className="muted">· {fmtDate(o.sentAt)}</span>
+                  </span>
+                  {co &&
+                    (onOpenCompany ? (
+                      <button className="link small" onClick={() => onOpenCompany(co.id)}>
+                        {displayName(co)} →
+                      </button>
+                    ) : (
+                      <span className="muted small">{displayName(co)}</span>
+                    ))}
+                </li>
+              );
+            })}
           </ul>
           {!showForm && (
-            <div className="row">
-              <button onClick={() => setShowForm(true)}>Log another</button>
-            </div>
+            <button className="btn-ghost btn-sm add-another" onClick={() => setShowForm(true)}>
+              + Log another
+            </button>
           )}
         </div>
       )}

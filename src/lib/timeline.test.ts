@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Application, Note, Outreach, Role, RoleEvent } from '../db/types';
-import { buildTimeline, glance } from './timeline';
+import { activity, buildTimeline } from './timeline';
 
 const app: Application = { id: 1, companyId: 1, platform: 'yc', appliedAt: 100, status: 'applied', notes: '' };
 const out: Outreach = { id: 1, companyId: 1, personName: 'Ada', channel: 'yc_message', sentAt: 300, status: 'sent', notes: '' };
@@ -26,14 +26,15 @@ describe('buildTimeline', () => {
   });
 });
 
-describe('glance', () => {
-  it('reports YC messages and emails', () => {
-    expect(glance([])).toEqual({ ycMessaged: false, emailed: false });
-    expect(glance([out])).toEqual({ ycMessaged: true, emailed: false });
-    expect(glance([out, { ...out, id: 2, channel: 'email' }])).toEqual({ ycMessaged: true, emailed: true });
-  });
-
-  it('does not count LinkedIn outreach', () => {
-    expect(glance([{ ...out, channel: 'linkedin_message' }])).toEqual({ ycMessaged: false, emailed: false });
+describe('activity', () => {
+  it('groups outreach by channel and applications with their role, newest first', () => {
+    const connect: Outreach = { ...out, id: 2, channel: 'linkedin_connection', sentAt: 500 };
+    const message: Outreach = { ...out, id: 3, channel: 'linkedin_message', sentAt: 600 };
+    const applied: Application = { ...app, roleId: 7 };
+    const a = activity([out, connect, message], [applied], [role]);
+    expect(a.yc.map((e) => e.record.id)).toEqual([1]);
+    expect(a.linkedin.map((e) => e.record.id)).toEqual([3, 2]);
+    expect(a.email).toEqual([]);
+    expect(a.applied[0]?.kind === 'application' && a.applied[0].role?.title).toBe('Backend Eng');
   });
 });

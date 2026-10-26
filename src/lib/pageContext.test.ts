@@ -38,6 +38,8 @@ describe('parsePageContext', () => {
     ['https://ats.rippling.com/acme/jobs/123', 'rippling', 'acme'],
     ['https://jobs.smartrecruiters.com/Acme/7444', 'smartrecruiters', 'acme'],
     ['https://acme.bamboohr.com/careers/12', 'bamboohr', 'acme'],
+    ['https://app.dover.com/apply/acme/3f2a9c', 'dover', 'acme'],
+    ['https://app.dover.com/jobs/acme', 'dover', 'acme'],
     ['https://acme.recruitee.com/o/engineer', 'recruitee', 'acme'],
     ['https://acme.breezy.hr/p/123-engineer', 'breezy', 'acme'],
     ['https://career.acme.teamtailor.com/jobs/1', 'teamtailor', 'acme'],

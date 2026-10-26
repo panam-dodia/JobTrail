@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useState } from 'react';
-import { linkPageToCompany, pageIdentifiers, recentActivity, saveRole, unseenEvents } from '../../db/repo';
+import { linkPageToCompany, pageIdentifiers, saveRole, unseenEvents } from '../../db/repo';
 import type { Company } from '../../db/types';
 import { matchByName } from '../../lib/match';
 import type { PageContext } from '../../lib/pageContext';
@@ -27,7 +27,6 @@ type Mode = 'idle' | 'pick';
 export function NoMatchView({ ctx, facts, kind, tabTitle, companies, onOpenCompany }: Props) {
   const [mode, setMode] = useState<Mode>('idle');
   const [notice, setNotice] = useState<{ text: string; companyId: number } | null>(null);
-  const recent = useLiveQuery(() => recentActivity(20), []);
   const unseen = useLiveQuery(() => unseenEvents(), []);
   const companiesById = new Map(companies.map((c) => [c.id, c]));
   const hasIds = ctx ? Object.keys(pageIdentifiers(ctx)).length > 0 : false;
@@ -66,7 +65,7 @@ export function NoMatchView({ ctx, facts, kind, tabTitle, companies, onOpenCompa
       <RepairBanner />
       {ctx && personPage &&
         (facts.personName ? (
-          <PersonPanel facts={facts} ctx={ctx} companies={companies} onLogged={onOpenCompany} />
+          <PersonPanel facts={facts} ctx={ctx} companies={companies} onLogged={onOpenCompany} onOpenCompany={onOpenCompany} />
         ) : (
           <section className="card">
             <p className="muted small">
@@ -144,19 +143,11 @@ export function NoMatchView({ ctx, facts, kind, tabTitle, companies, onOpenCompa
       )}
 
       {!!unseen?.length && (
-        <section>
-          <h3>New roles</h3>
+        <section className="section">
+          <h3 className="section-title">New roles</h3>
           <Timeline items={unseen} companiesById={companiesById} onOpenCompany={onOpenCompany} />
         </section>
       )}
-      <section>
-        <h3>Recent activity</h3>
-        {recent ? (
-          <Timeline items={recent} companiesById={companiesById} onOpenCompany={onOpenCompany} empty="Nothing logged yet." />
-        ) : (
-          <p className="muted">Loading…</p>
-        )}
-      </section>
     </div>
   );
 }

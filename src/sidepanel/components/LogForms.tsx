@@ -12,7 +12,7 @@ import {
 } from '../../db/types';
 import type { PageContext } from '../../lib/pageContext';
 import type { PageFacts } from '../../lib/pageFacts';
-import { CHANNEL_LABELS, PLATFORM_LABELS, defaultChannel, defaultPlatform, fromDateInput, label, toDateInput } from '../format';
+import { CHANNEL_LABELS, APPLIED_VIA_LABELS, defaultChannel, defaultPlatform, fromDateInput, label, toDateInput } from '../format';
 
 interface Props {
   companyId: number;
@@ -58,7 +58,7 @@ export function ApplicationForm({ companyId, ctx, defaultRole, onDone }: Props &
           <select value={platform} onChange={(e) => setPlatform(e.target.value as Platform)}>
             {PLATFORMS.map((p) => (
               <option key={p} value={p}>
-                {PLATFORM_LABELS[p]}
+                {APPLIED_VIA_LABELS[p]}
               </option>
             ))}
           </select>

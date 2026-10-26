@@ -43,9 +43,13 @@ export const PLATFORM_LABELS: Record<Platform, string> = {
   recruitee: 'Recruitee',
   breezy: 'Breezy',
   teamtailor: 'Teamtailor',
+  dover: 'Dover',
   email: 'Email',
   other: 'Other',
 };
+
+/** Where an application was submitted. Applying on LinkedIn itself means Easy Apply. */
+export const APPLIED_VIA_LABELS: Record<Platform, string> = { ...PLATFORM_LABELS, linkedin: 'LinkedIn Easy Apply' };
 
 export const CHANNEL_LABELS: Record<OutreachChannel, string> = {
   linkedin_connection: 'LinkedIn connection',

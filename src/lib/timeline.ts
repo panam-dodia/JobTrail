@@ -26,14 +26,27 @@ export function buildTimeline({ applications, outreach, notes, events, roles = [
   return items.sort((a, b) => b.at - a.at || b.record.id - a.record.id);
 }
 
-export interface Glance {
-  ycMessaged: boolean;
-  emailed: boolean;
-}
+export type ActivityChannel = 'yc' | 'linkedin' | 'email' | 'applied';
+export const ACTIVITY_CHANNELS: ActivityChannel[] = ['yc', 'linkedin', 'email', 'applied'];
 
-export function glance(outreach: Outreach[]): Glance {
-  return {
-    ycMessaged: outreach.some((o) => o.channel === 'yc_message'),
-    emailed: outreach.some((o) => o.channel === 'email'),
-  };
+export type ActivityEntry =
+  | { kind: 'outreach'; at: number; record: Outreach }
+  | { kind: 'application'; at: number; record: Application; role?: Role };
+
+/**
+ * A company's outreach and applications by channel, newest first in each:
+ * YC messages, LinkedIn (connection requests and messages), email, and applications.
+ */
+export function activity(outreach: Outreach[], applications: Application[], roles: Role[] = []): Record<ActivityChannel, ActivityEntry[]> {
+  const rolesById = new Map(roles.map((r) => [r.id, r]));
+  const out: Record<ActivityChannel, ActivityEntry[]> = { yc: [], linkedin: [], email: [], applied: [] };
+  for (const record of outreach) {
+    const channel = record.channel === 'yc_message' ? 'yc' : record.channel === 'email' ? 'email' : 'linkedin';
+    out[channel].push({ kind: 'outreach', at: record.sentAt, record });
+  }
+  for (const record of applications) {
+    out.applied.push({ kind: 'application', at: record.appliedAt, record, role: record.roleId ? rolesById.get(record.roleId) : undefined });
+  }
+  for (const list of Object.values(out)) list.sort((a, b) => b.at - a.at || b.record.id - a.record.id);
+  return out;
 }

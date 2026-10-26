@@ -7,9 +7,13 @@ export const GMAIL = {
   composeSubject: 'input[name="subjectbox"]',
   /** An open conversation: its subject, and the people on each message (sender and recipients). */
   threadSubject: 'h2.hP',
-  participants: 'span.gD[email], span.g2[email]',
+  participants: 'span.gD[email], span.g2[email], span.g2[data-hovercard-id]',
   /** Your own address is in the tab title: "Inbox (3) - me@example.com - Gmail". */
   ownEmail: /\s-\s([^\s@]+@[^\s]+)\s-\s/,
+  /** Marketing words around a company's name in its domain: withbasis.co, getacme.com, acmehq.com. */
+  domainPrefixes: ['with', 'get', 'try', 'join'],
+  domainSuffixes: ['hq', 'app'],
+  minCompanyLength: 3,
   /** Personal email providers: the address says nothing about the company. */
   freeDomains: [
     'gmail.com', 'googlemail.com', 'outlook.com', 'hotmail.com', 'live.com', 'yahoo.com', 'icloud.com', 'me.com',

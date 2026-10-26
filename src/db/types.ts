@@ -2,7 +2,7 @@
 
 /** Hiring tools that host companies' job pages. Only Greenhouse, Lever and Ashby have public APIs to poll. */
 export const JOB_BOARDS = [
-  'greenhouse', 'lever', 'ashby', 'gem', 'workable', 'rippling', 'smartrecruiters', 'bamboohr', 'recruitee', 'breezy', 'teamtailor',
+  'greenhouse', 'lever', 'ashby', 'gem', 'workable', 'rippling', 'smartrecruiters', 'bamboohr', 'recruitee', 'breezy', 'teamtailor', 'dover',
 ] as const;
 export type JobBoard = (typeof JOB_BOARDS)[number];
 export type AtsType = JobBoard | 'other';
