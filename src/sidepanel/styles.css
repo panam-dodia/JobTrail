@@ -101,6 +101,16 @@ ul.plain {
 }
 
 /* Tabs */
+.page-kind {
+  align-self: flex-start;
+  margin: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--muted);
+}
 .tabs {
   display: flex;
   gap: 4px;
@@ -195,6 +205,11 @@ textarea {
 }
 .card.ask {
   border-color: var(--accent);
+}
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 .form label {
   display: flex;

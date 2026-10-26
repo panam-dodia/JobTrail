@@ -5,12 +5,14 @@ import { deleteCompany, roleTitlesByCompany } from '../db/repo';
 import { matchByPage } from '../lib/match';
 import { parsePageContext } from '../lib/pageContext';
 import { mergeFacts } from '../lib/pageFacts';
+import { detectPageKind, PAGE_KIND_LABELS } from '../lib/pageKind';
 import { parseJobTitle } from '../lib/pageTitle';
 import { CompanyForm } from './components/CompanyForm';
 import { CompanyPicker } from './components/CompanyPicker';
 import { CompanyView } from './components/CompanyView';
 import { NoMatchView } from './components/NoMatchView';
 import { RepairBanner } from './components/RepairBanner';
+import { defaultPlatform, PLATFORM_LABELS } from './format';
 import { useActiveTab } from './useActiveTab';
 import { usePageFacts } from './usePageFacts';
 
@@ -35,10 +37,21 @@ export function App() {
   if (!companies) return <main className="app muted">Loading…</main>;
 
   const fromTitle = parseJobTitle(tab.title);
-  const facts = mergeFacts({ companyName: fromTitle.company, roleTitle: fromTitle.role }, scraped);
+  const facts = mergeFacts({ companyName: fromTitle.company, roleTitle: fromTitle.role, location: fromTitle.location }, scraped);
   const pageCtx = tab.url ? parsePageContext(tab.url) : undefined;
   // Identifiers read off the page (e.g. the YC slug on a WaaS job page) count for matching too.
-  const ctx = pageCtx && { ...pageCtx, ycSlug: pageCtx.ycSlug ?? facts.ycSlug, ats: pageCtx.ats ?? facts.ats };
+  // In Gmail, the other person's work email domain says which company it is.
+  const ctx = pageCtx && {
+    ...pageCtx,
+    ycSlug: pageCtx.ycSlug ?? facts.ycSlug,
+    ats: pageCtx.ats ?? facts.ats,
+    domain: pageCtx.domain ?? (pageCtx.site === 'gmail' ? facts.domain : undefined),
+  };
+  const kind = detectPageKind(ctx);
+  const platform = defaultPlatform(ctx);
+  // "Job page · Gem"; profile and email labels already say where they are.
+  const kindLabel =
+    PAGE_KIND_LABELS[kind] + (kind === 'profile' || kind === 'email' || platform === 'other' ? '' : ` · ${PLATFORM_LABELS[platform]}`);
   const matched = ctx ? matchByPage(ctx, companies) : undefined;
   const opened = openedId !== null ? companies.find((c) => c.id === openedId) : undefined;
 
@@ -57,6 +70,7 @@ export function App() {
         companies={companies}
         ctx={view === 'page' ? ctx : undefined}
         facts={view === 'page' ? facts : undefined}
+        kind={view === 'page' ? kind : undefined}
         onBack={back}
         onDeleted={back}
       />
@@ -74,9 +88,9 @@ export function App() {
       </div>
     );
   } else if (matched) {
-    content = <CompanyView key={matched.id} company={matched} companies={companies} ctx={ctx} facts={facts} onDeleted={back} />;
+    content = <CompanyView key={matched.id} company={matched} companies={companies} ctx={ctx} facts={facts} kind={kind} matchedByPage onDeleted={back} />;
   } else {
-    content = <NoMatchView key={tab.url} ctx={ctx} facts={facts} tabTitle={tab.title} companies={companies} onOpenCompany={open} />;
+    content = <NoMatchView key={tab.url} ctx={ctx} facts={facts} kind={kind} tabTitle={tab.title} companies={companies} onOpenCompany={open} />;
   }
 
   return (
@@ -96,6 +110,7 @@ export function App() {
           </button>
         ))}
       </nav>
+      {ctx && view === 'page' && <p className="page-kind">{kindLabel}</p>}
       {content}
     </main>
   );

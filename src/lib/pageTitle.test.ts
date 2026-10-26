@@ -12,9 +12,18 @@ describe('parseJobTitle', () => {
     ['Trader, Compute Markets at Stoa (YC S24)', 'Stoa', 'Trader, Compute Markets'],
     ['Job Application for Backend Engineer at Acme', 'Acme', 'Backend Engineer'],
     ['Founding Engineer @ Acme', 'Acme', 'Founding Engineer'],
-    ['Acme hiring Software Engineer in San Francisco, CA | LinkedIn', 'Acme', 'Software Engineer'],
+    ['Forward Deployed Engineer, Triage (SF) | AssemblyAI | LinkedIn', 'AssemblyAI', 'Forward Deployed Engineer, Triage (SF)'],
+    ['(3) Forward Deployed Engineer | AssemblyAI | LinkedIn', 'AssemblyAI', 'Forward Deployed Engineer'],
   ])('%s', (title, company, role) => {
     expect(parseJobTitle(title)).toEqual({ company, role });
+  });
+
+  it('reads the location from LinkedIn "X hiring Y in Z" titles', () => {
+    expect(parseJobTitle('Acme hiring Software Engineer in San Francisco, CA | LinkedIn')).toEqual({
+      company: 'Acme',
+      role: 'Software Engineer',
+      location: 'San Francisco, CA',
+    });
   });
 
   it('uses the last " at " so role titles can contain it', () => {
@@ -28,6 +37,8 @@ describe('parseJobTitle', () => {
 
   it('returns nothing for titles without a pattern', () => {
     expect(parseJobTitle('Stripe | Payments infrastructure')).toEqual({});
+    expect(parseJobTitle('(3) Feed | LinkedIn')).toEqual({});
+    expect(parseJobTitle('Dylan Fox | LinkedIn')).toEqual({});
     expect(parseJobTitle('')).toEqual({});
     expect(parseJobTitle(undefined)).toEqual({});
   });

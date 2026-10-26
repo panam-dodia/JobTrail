@@ -1,6 +1,11 @@
 // All timestamps are epoch milliseconds.
 
-export type AtsType = 'greenhouse' | 'lever' | 'ashby' | 'other';
+/** Hiring tools that host companies' job pages. Only Greenhouse, Lever and Ashby have public APIs to poll. */
+export const JOB_BOARDS = [
+  'greenhouse', 'lever', 'ashby', 'gem', 'workable', 'rippling', 'smartrecruiters', 'bamboohr', 'recruitee', 'breezy', 'teamtailor',
+] as const;
+export type JobBoard = (typeof JOB_BOARDS)[number];
+export type AtsType = JobBoard | 'other';
 export type Sponsorship = 'yes' | 'no' | 'unknown';
 
 export interface AtsRef {
@@ -15,12 +20,15 @@ export interface Company {
   domain?: string;
   ycSlug?: string;
   ats?: AtsRef;
+  /** Where the company or role is based, as the page shows it, e.g. "San Francisco, CA, US / Remote". */
+  location?: string;
   sponsorship: Sponsorship;
   watching: boolean;
   createdAt: number;
 }
 
-export type RoleSource = 'yc' | 'linkedin' | 'glassdoor' | 'greenhouse' | 'lever' | 'ashby' | 'careers_page';
+export type RoleSource = 'yc' | 'linkedin' | 'glassdoor' | JobBoard | 'careers_page';
+export const ROLE_SOURCES: RoleSource[] = ['yc', 'linkedin', 'glassdoor', ...JOB_BOARDS, 'careers_page'];
 
 export interface Role {
   id: number;
@@ -37,8 +45,8 @@ export interface Role {
 export type ApplicationStatus = 'applied' | 'interviewing' | 'rejected' | 'offer' | 'ghosted';
 export const APPLICATION_STATUSES: ApplicationStatus[] = ['applied', 'interviewing', 'rejected', 'offer', 'ghosted'];
 
-export type Platform = 'yc' | 'linkedin' | 'glassdoor' | 'careers_page' | 'greenhouse' | 'lever' | 'ashby' | 'email' | 'other';
-export const PLATFORMS: Platform[] = ['yc', 'linkedin', 'glassdoor', 'careers_page', 'greenhouse', 'lever', 'ashby', 'email', 'other'];
+export type Platform = RoleSource | 'email' | 'other';
+export const PLATFORMS: Platform[] = [...ROLE_SOURCES, 'email', 'other'];
 
 export interface Application {
   id: number;

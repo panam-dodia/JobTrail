@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import type { Company } from '../../db/types';
+import { displayName } from '../../lib/companyName';
+import type { RoleTitle } from '../../db/repo';
+import { fmtDateTime, PLATFORM_LABELS } from '../format';
 import { compactKey } from '../../lib/normalize';
 
 interface Props {
   companies: Company[];
   /** Role titles to list under each company. */
-  roles?: Map<number, string[]>;
+  roles?: Map<number, RoleTitle[]>;
   onPick: (company: Company) => void;
   /** When set, each row gets a delete button (with a confirm step). */
   onDelete?: (company: Company) => void;
@@ -18,7 +21,7 @@ export function CompanyPicker({ companies, roles, onPick, onDelete, placeholder 
   const [confirming, setConfirming] = useState<number | null>(null);
   const q = compactKey(query);
   const results = q
-    ? companies.filter((c) => [c.name, ...c.aliases, ...(roles?.get(c.id) ?? [])].some((n) => compactKey(n).includes(q)))
+    ? companies.filter((c) => [c.name, ...c.aliases, ...(roles?.get(c.id) ?? []).map((r) => r.title)].some((n) => compactKey(n).includes(q)))
     : companies;
   const sorted = [...results].sort((a, b) => a.name.localeCompare(b.name));
 
@@ -34,19 +37,19 @@ export function CompanyPicker({ companies, roles, onPick, onDelete, placeholder 
                 <span className="company-cell">
                   <span className="company-name">
                     {c.watching && <span title="Watching">★ </span>}
-                    {c.name}
+                    {displayName(c)}
                   </span>
                   {titles.length > 0 && (
                     <span className="role-list">
-                      {titles.map((t) => (
-                        <span key={t} className="role">
-                          {t}
+                      {titles.map((r) => (
+                        <span key={r.title} className="role">
+                          {r.title} <span className="muted small">· {PLATFORM_LABELS[r.platform]}</span>
                         </span>
                       ))}
                     </span>
                   )}
                 </span>
-                <span className="muted">{c.domain ?? c.ycSlug ?? ''}</span>
+                <span className="muted small" title="Added">{fmtDateTime(c.createdAt)}</span>
               </button>
               {onDelete &&
                 (confirming === c.id ? (

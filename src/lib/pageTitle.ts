@@ -1,6 +1,7 @@
 export interface TitleGuess {
   company?: string;
   role?: string;
+  location?: string;
 }
 
 // " - LinkedIn" etc. appended by job sites with a dash; " | <site>" is cut off wholesale.
@@ -17,16 +18,24 @@ const GENERIC_ROLE = /^(careers?|jobs?|open (roles|positions)|join us|work (with
  */
 export function parseJobTitle(raw?: string): TitleGuess {
   if (!raw) return {};
+  // LinkedIn prefixes an unread count: "(3) Feed | LinkedIn".
+  const parts = raw.replace(/\s+/g, ' ').replace(/^\(\d+\+?\) /, '').split(' | ').map((p) => p.trim());
+  // LinkedIn job pages: "Forward Deployed Engineer | AssemblyAI | LinkedIn".
+  if (parts.length === 3 && /^linkedin$/i.test(parts[2] ?? '')) return clean(parts[0], parts[1]);
   // Site names come after the first " | " and can contain " at " themselves ("Work at a Startup").
-  let t = (raw.replace(/\s+/g, ' ').split(' | ')[0] ?? '').trim();
+  let t = parts[0] ?? '';
   for (let prev = ''; prev !== t; ) {
     prev = t;
     t = t.replace(SITE_SUFFIX, '').trim();
   }
   t = t.replace(/^job application for /i, '');
 
-  const hiring = t.match(/^(.+?) hiring (.+?)(?: in .+)?$/i);
-  if (hiring) return clean(hiring[2], hiring[1]);
+  const hiring = t.match(/^(.+?) hiring (.+?)(?: in (.+))?$/i);
+  if (hiring) {
+    const guess = clean(hiring[2], hiring[1]);
+    const location = hiring[3]?.trim();
+    return guess.company && location ? { ...guess, location } : guess;
+  }
 
   const lower = t.toLowerCase();
   const at = lower.lastIndexOf(' at ');

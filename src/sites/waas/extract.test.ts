@@ -35,6 +35,7 @@ describe('extractWaas', () => {
       ycSlug: 'stoa',
       domain: 'stoa.com',
       sponsorship: 'yes',
+      location: 'San Francisco, CA, US / Remote',
     });
   });
 
@@ -45,6 +46,10 @@ describe('extractWaas', () => {
   it('ignores visa wording inside long description text', () => {
     const prose = '<p>We are a small team and unfortunately we are not able to say whether we will sponsor visas for this role yet.</p>';
     expect(extractWaas(page(prose)).sponsorship).toBeUndefined();
+  });
+
+  it('reads a remote-only location tag', () => {
+    expect(extractWaas(page('<div><span>Remote (US)</span><span>Full-time</span></div>')).location).toBe('Remote (US)');
   });
 
   it('picks up an ATS board link', () => {

@@ -11,6 +11,7 @@ import {
   type Platform,
 } from '../../db/types';
 import type { PageContext } from '../../lib/pageContext';
+import type { PageFacts } from '../../lib/pageFacts';
 import { CHANNEL_LABELS, PLATFORM_LABELS, defaultChannel, defaultPlatform, fromDateInput, label, toDateInput } from '../format';
 
 interface Props {
@@ -91,14 +92,18 @@ export function ApplicationForm({ companyId, ctx, defaultRole, onDone }: Props &
   );
 }
 
-export function OutreachForm({ companyId, ctx, onDone }: Props) {
-  const [personName, setPersonName] = useState('');
-  const [personTitle, setPersonTitle] = useState('');
-  const [profileUrl, setProfileUrl] = useState(ctx?.site === 'linkedin' && ctx.url.includes('/in/') ? ctx.url : '');
+/** Prefills from the person on the page (LinkedIn profile, message thread, email). */
+export function OutreachForm({ companyId, ctx, person, onDone }: Props & { person?: PageFacts }) {
+  const [personName, setPersonName] = useState(person?.personName ?? '');
+  const [personTitle, setPersonTitle] = useState(person?.personTitle ?? '');
+  const [profileUrl, setProfileUrl] = useState(
+    person?.profileUrl ??
+      (person?.personEmail ? `mailto:${person.personEmail}` : ctx?.site === 'linkedin' && ctx.url.includes('/in/') ? ctx.url : ''),
+  );
   const [channel, setChannel] = useState<OutreachChannel>(defaultChannel(ctx));
   const [date, setDate] = useState(toDateInput(Date.now()));
   const [status, setStatus] = useState<OutreachStatus>('sent');
-  const [notes, setNotes] = useState('');
+  const [notes, setNotes] = useState(person?.emailSubject ? `Subject: ${person.emailSubject}` : '');
   const [error, setError] = useState('');
 
   return (

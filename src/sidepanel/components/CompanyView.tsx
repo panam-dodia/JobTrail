@@ -1,14 +1,17 @@
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { db } from '../../db';
 import { addNote, companyTimeline, deleteCompany, saveRole, updateCompany } from '../../db/repo';
 import type { Application, Company, Outreach, Sponsorship } from '../../db/types';
+import { displayName } from '../../lib/companyName';
 import type { PageContext } from '../../lib/pageContext';
 import type { PageFacts } from '../../lib/pageFacts';
+import { isPersonKind, type PageKind } from '../../lib/pageKind';
 import { glance } from '../../lib/timeline';
-import { roleSource } from '../format';
+import { PLATFORM_LABELS, roleSource } from '../format';
 import { CompanyForm } from './CompanyForm';
 import { ApplicationForm, OutreachForm } from './LogForms';
+import { PersonPanel } from './PersonPanel';
 import { Timeline } from './Timeline';
 
 interface Props {
@@ -16,6 +19,13 @@ interface Props {
   companies: Company[];
   ctx?: PageContext;
   facts?: PageFacts;
+  /**
+   * The page matched this company, so its hidden identifiers (website, YC slug, job board) are
+   * quietly completed from the page. Off when the company was opened by hand from a list.
+   */
+  matchedByPage?: boolean;
+  /** On a profile, message thread or email, the person is shown with a ready-to-log outreach form. */
+  kind?: PageKind;
   onBack?: () => void;
   onDeleted: () => void;
 }
@@ -24,7 +34,7 @@ type Panel = 'none' | 'application' | 'outreach' | 'edit';
 
 const sameTitle = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
-export function CompanyView({ company, companies, ctx, facts, onBack, onDeleted }: Props) {
+export function CompanyView({ company, companies, ctx, facts, matchedByPage, kind, onBack, onDeleted }: Props) {
   const items = useLiveQuery(() => companyTimeline(company.id), [company.id]);
   const roles = useLiveQuery(() => db.roles.where('companyId').equals(company.id).reverse().sortBy('firstSeen'), [company.id]);
   const [panel, setPanel] = useState<Panel>('none');
@@ -38,16 +48,28 @@ export function CompanyView({ company, companies, ctx, facts, onBack, onDeleted 
   // Details on the page that this company is still missing. Never overwrites what's already set.
   const fill: Partial<Company> = {
     ...(facts?.sponsorship && company.sponsorship === 'unknown' && { sponsorship: facts.sponsorship }),
-    ...(facts?.domain && !company.domain && { domain: facts.domain }),
-    ...(facts?.ycSlug && !company.ycSlug && { ycSlug: facts.ycSlug }),
-    ...(facts?.ats && !company.ats && { ats: facts.ats }),
+    // On a profile the location is the person's, not the company's.
+    ...(facts?.location && !company.location && !(kind && isPersonKind(kind)) && { location: facts.location }),
   };
   const fillLabels = [
     fill.sponsorship && `visa sponsorship: ${fill.sponsorship}`,
-    fill.domain && `website: ${fill.domain}`,
-    fill.ycSlug && `YC slug: ${fill.ycSlug}`,
-    fill.ats && `job board: ${fill.ats.type}/${fill.ats.token}`,
+    fill.location && `location: ${fill.location}`,
   ].filter(Boolean);
+
+  // Identifiers aren't shown, so there's nothing to confirm; only blanks are filled.
+  const hidden: Partial<Company> = matchedByPage
+    ? {
+        ...(facts?.domain && !company.domain && { domain: facts.domain }),
+        ...(ctx?.ycSlug && !company.ycSlug && { ycSlug: ctx.ycSlug }),
+        ...(ctx?.ats && !company.ats && { ats: ctx.ats }),
+      }
+    : {};
+  const hiddenKey = JSON.stringify(hidden);
+  useEffect(() => {
+    if (hiddenKey !== '{}') void updateCompany(company.id, JSON.parse(hiddenKey) as Partial<Company>);
+  }, [company.id, hiddenKey]);
+
+  const person = kind && isPersonKind(kind) && facts?.personName ? facts : undefined;
 
   if (panel === 'edit') {
     return (
@@ -69,14 +91,10 @@ export function CompanyView({ company, companies, ctx, facts, onBack, onDeleted 
           </button>
         )}
         <div className="row">
-          <h2 className="grow">{company.name}</h2>
+          <h2 className="grow">{displayName(company)}</h2>
           <button onClick={() => setPanel('edit')}>Edit</button>
         </div>
-        <p className="muted ids">
-          {[company.domain, company.ycSlug && `YC: ${company.ycSlug}`, company.ats && `${company.ats.type}: ${company.ats.token}`]
-            .filter(Boolean)
-            .join(' · ') || 'No identifiers yet. Edit to add a domain, YC slug or job board.'}
-        </p>
+        {company.location && <p className="muted small">📍 {company.location}</p>}
         <div className="row">
           <label className="inline">
             Sponsorship
@@ -100,9 +118,11 @@ export function CompanyView({ company, companies, ctx, facts, onBack, onDeleted 
           </label>
         </div>
         {company.watching && !company.ats && (
-          <p className="muted small">Add a job board token to get new-role alerts for this company.</p>
+          <p className="muted small">New-role alerts start once JobTrail has seen this company's job board (visit their careers page).</p>
         )}
       </header>
+
+      {person && <PersonPanel facts={person} ctx={ctx} companies={companies} company={company} onLogged={() => undefined} />}
 
       {fillLabels.length > 0 && (
         <div className="ask-inline">
@@ -135,7 +155,9 @@ export function CompanyView({ company, companies, ctx, facts, onBack, onDeleted 
       {panel === 'application' && (
         <ApplicationForm companyId={company.id} ctx={ctx} defaultRole={pageRole} onDone={() => setPanel('none')} />
       )}
-      {panel === 'outreach' && <OutreachForm companyId={company.id} ctx={ctx} onDone={() => setPanel('none')} />}
+      {panel === 'outreach' && (
+        <OutreachForm companyId={company.id} ctx={ctx} onDone={() => setPanel('none')} />
+      )}
 
       <section>
         <h3>Roles</h3>
@@ -165,6 +187,7 @@ export function CompanyView({ company, companies, ctx, facts, onBack, onDeleted 
                 ) : (
                   <span>{r.title}</span>
                 )}
+                <span className="muted small"> · {PLATFORM_LABELS[r.source]}</span>
                 {applied(r.id, r.title) && <span className="tag">applied</span>}
               </li>
             ))}

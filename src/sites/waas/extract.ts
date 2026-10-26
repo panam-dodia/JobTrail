@@ -50,8 +50,10 @@ export function extractWaas(doc: Document): PageFacts {
   }
 
   facts.sponsorship = findSponsorship(doc);
+  facts.location = findLocation(doc);
   if (!facts.ats) delete facts.ats;
   if (!facts.sponsorship) delete facts.sponsorship;
+  if (!facts.location) delete facts.location;
   return facts;
 }
 
@@ -61,6 +63,16 @@ function findSponsorship(doc: Document): PageFacts['sponsorship'] {
     if (!text || text.length > WAAS.maxLabelLength) continue;
     const hit = WAAS.sponsorship.find((s) => s.pattern.test(text));
     if (hit) return hit.value;
+  }
+  return undefined;
+}
+
+function findLocation(doc: Document): string | undefined {
+  // Only innermost elements, so a tag row's combined text isn't mistaken for one tag.
+  for (const el of Array.from(doc.querySelectorAll(WAAS.labelSelector))) {
+    if (el.children.length) continue;
+    const text = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+    if (text && text.length <= WAAS.maxLabelLength && WAAS.location.some((p) => p.test(text))) return text;
   }
   return undefined;
 }

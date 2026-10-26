@@ -32,6 +32,24 @@ describe('parsePageContext', () => {
     expect(parsePageContext(url)?.ats).toEqual({ type, token });
   });
 
+  it.each([
+    ['https://jobs.gem.com/ultra/am9pcG9zdDql3_hO0', 'gem', 'ultra'],
+    ['https://apply.workable.com/acme/j/ABC123/', 'workable', 'acme'],
+    ['https://ats.rippling.com/acme/jobs/123', 'rippling', 'acme'],
+    ['https://jobs.smartrecruiters.com/Acme/7444', 'smartrecruiters', 'acme'],
+    ['https://acme.bamboohr.com/careers/12', 'bamboohr', 'acme'],
+    ['https://acme.recruitee.com/o/engineer', 'recruitee', 'acme'],
+    ['https://acme.breezy.hr/p/123-engineer', 'breezy', 'acme'],
+    ['https://career.acme.teamtailor.com/jobs/1', 'teamtailor', 'acme'],
+  ])('reads the company from hosted job board %s', (url, type, token) => {
+    expect(parsePageContext(url)).toMatchObject({ site: type, ats: { type, token } });
+    expect(parsePageContext(url)?.domain).toBeUndefined();
+  });
+
+  it('has no company on a job board host itself', () => {
+    expect(parsePageContext('https://www.bamboohr.com/pricing')?.ats).toBeUndefined();
+  });
+
   it('does not give platform hosts a matchable domain', () => {
     for (const url of ['https://www.linkedin.com/company/acme', 'https://www.glassdoor.com/Overview/acme', 'https://jobs.lever.co/acme']) {
       expect(parsePageContext(url)?.domain).toBeUndefined();

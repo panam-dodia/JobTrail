@@ -9,6 +9,15 @@ export interface PageFacts {
   domain?: string;
   ats?: AtsRef;
   sponsorship?: Sponsorship;
+  location?: string;
+  /** The person on a profile, message thread or email. */
+  personName?: string;
+  personTitle?: string;
+  personEmail?: string;
+  profileUrl?: string;
+  emailSubject?: string;
+  /** LinkedIn profiles: connected (1st), request pending, or neither. */
+  connection?: 'connected' | 'pending' | 'none';
 }
 
 export const PAGE_FACTS_MESSAGE = 'jobtrail:page-facts';

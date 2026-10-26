@@ -1,58 +1,96 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createCompany, updateCompany } from '../../db/repo';
-import type { AtsType, Company, Sponsorship } from '../../db/types';
+import { ROLE_SOURCES, type Company, type RoleSource, type Sponsorship } from '../../db/types';
+import { displayName, splitNames } from '../../lib/companyName';
 import { matchByName } from '../../lib/match';
 import { normalizeDomain } from '../../lib/normalize';
+import { PLATFORM_LABELS } from '../format';
+
+/** The role on the page and where it was found. */
+export interface PageRole {
+  title: string;
+  source: RoleSource;
+}
 
 interface Props {
   companies: Company[];
   /** Present when editing; absent when adding. */
   company?: Company;
+  /**
+   * Prefill for a new company. May change while the form is open (page facts arrive late); blanks get filled.
+   * Its domain, YC slug and job board aren't shown but are saved with the company, for matching pages later.
+   */
   initial?: Partial<Company>;
-  onDone: (companyId: number) => void;
+  /** Shows role and platform fields, prefilled with these; the result goes to onDone/onPickExisting. */
+  role?: string;
+  source?: RoleSource;
+  title?: string;
+  submitLabel?: string;
+  /** Renders without its own card, for use inside another card. */
+  embedded?: boolean;
+  /** Extra buttons next to Save. */
+  actions?: ReactNode;
+  onDone: (companyId: number, role?: PageRole) => void;
   /** Called when the user says the new company is one they already track. */
-  onPickExisting?: (company: Company) => void;
-  onCancel: () => void;
+  onPickExisting?: (company: Company, role?: PageRole) => void;
+  onCancel?: () => void;
 }
 
-const ATS_TYPES: AtsType[] = ['greenhouse', 'lever', 'ashby', 'other'];
-
-export function CompanyForm({ companies, company, initial, onDone, onPickExisting, onCancel }: Props) {
+export function CompanyForm(props: Props) {
+  const { companies, company, initial, role, source, title, submitLabel, embedded, actions, onDone, onPickExisting, onCancel } = props;
   const base = company ?? initial ?? {};
-  const [name, setName] = useState(base.name ?? '');
-  const [aliases, setAliases] = useState((base.aliases ?? []).join(', '));
-  const [domain, setDomain] = useState(base.domain ?? '');
-  const [ycSlug, setYcSlug] = useState(base.ycSlug ?? '');
-  const [atsType, setAtsType] = useState<AtsType>(base.ats?.type ?? 'greenhouse');
-  const [atsToken, setAtsToken] = useState(base.ats?.token ?? '');
+  const [name, setName] = useState(base.name ? displayName({ name: base.name, aliases: base.aliases ?? [] }) : '');
+  const [location, setLocation] = useState(base.location ?? '');
   const [sponsorship, setSponsorship] = useState<Sponsorship>(base.sponsorship ?? 'unknown');
+  const [roleTitle, setRoleTitle] = useState(role ?? '');
+  const [platform, setPlatform] = useState<RoleSource>(source ?? 'careers_page');
+  const pageRole = (): PageRole | undefined => (roleTitle.trim() ? { title: roleTitle.trim(), source: platform } : undefined);
   const [possibleDupes, setPossibleDupes] = useState<Company[] | null>(null);
   const [error, setError] = useState('');
 
+  // Fields follow the page as its facts come in or change (e.g. picking another job in LinkedIn's
+  // list), until the user types in them.
+  const touched = useRef(new Set<string>());
+  const typed = <T,>(field: string, set: (v: T) => void) => (v: T) => {
+    touched.current.add(field);
+    set(v);
+  };
+  const live = company ? '' : JSON.stringify([initial, role, source]);
+  useEffect(() => {
+    if (!live || !initial) return;
+    const follow = <T,>(field: string, set: (v: T) => void, v: T | undefined) => {
+      if (v && !touched.current.has(field)) set(v);
+    };
+    follow('name', setName, initial.name);
+    follow('location', setLocation, initial.location);
+    follow('role', setRoleTitle, role);
+    follow('sponsorship', setSponsorship, initial.sponsorship);
+    follow('platform', setPlatform, source);
+    // Only re-run when the prefill itself changes.
+  }, [live]);
+
   async function save(skipDupeCheck = false) {
-    const trimmed = name.trim();
-    if (!trimmed) return setError('Name is required.');
-    const normDomain = domain.trim() ? normalizeDomain(domain) : undefined;
-    if (domain.trim() && !normDomain) return setError('Domain should look like acme.com.');
+    const names = splitNames(name);
+    if (!names) return setError('Name is required.');
 
     if (!company && !skipDupeCheck) {
-      const { exact, candidates } = matchByName(trimmed, companies);
+      const { exact, candidates } = matchByName(names.name, companies);
       if (exact.length || candidates.length) return setPossibleDupes([...exact, ...candidates]);
     }
 
-    const fields = {
-      name: trimmed,
-      aliases: aliases.split(',').map((a) => a.trim()).filter(Boolean),
-      domain: normDomain,
-      ycSlug: ycSlug.trim().toLowerCase() || undefined,
-      ats: atsToken.trim() ? { type: atsType, token: atsToken.trim().toLowerCase() } : undefined,
-      sponsorship,
-    };
+    const fields = { ...names, location: location.trim() || undefined, sponsorship };
     if (company) {
+      // Hidden identifiers are left as they are.
       await updateCompany(company.id, fields);
       onDone(company.id);
     } else {
-      onDone(await createCompany(fields));
+      const id = await createCompany({
+        ...fields,
+        domain: initial?.domain ? normalizeDomain(initial.domain) : undefined,
+        ycSlug: initial?.ycSlug,
+        ats: initial?.ats,
+      });
+      onDone(id, pageRole());
     }
   }
 
@@ -60,15 +98,15 @@ export function CompanyForm({ companies, company, initial, onDone, onPickExistin
     return (
       <div className="card ask">
         <p>
-          <strong>Is “{name.trim()}” one of these?</strong>
+          <strong>Is “{splitNames(name)?.name}” one of these?</strong>
         </p>
         <ul className="plain">
           {possibleDupes.map((c) => (
             <li key={c.id} className="row">
               <span>
-                {c.name} {c.domain && <span className="muted">· {c.domain}</span>}
+                {displayName(c)} {c.location && <span className="muted">· {c.location}</span>}
               </span>
-              <button onClick={() => onPickExisting?.(c)}>Yes, use this</button>
+              <button onClick={() => onPickExisting?.(c, pageRole())}>Yes, use this</button>
             </li>
           ))}
         </ul>
@@ -84,46 +122,42 @@ export function CompanyForm({ companies, company, initial, onDone, onPickExistin
 
   return (
     <form
-      className="card form"
+      className={embedded ? 'form' : 'card form'}
       onSubmit={(e) => {
         e.preventDefault();
         void save();
       }}
     >
-      <h3>{company ? 'Edit company' : 'Add company'}</h3>
+      <h3>{title ?? (company ? 'Edit company' : 'Add company')}</h3>
       <label>
-        Name
-        <input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+        Name <span className="muted">(other names after a slash: abc / abc labs)</span>
+        <input value={name} onChange={(e) => typed('name', setName)(e.target.value)} autoFocus={!embedded} />
       </label>
-      <label>
-        Other names <span className="muted">(comma-separated)</span>
-        <input value={aliases} onChange={(e) => setAliases(e.target.value)} />
-      </label>
-      <label>
-        Website domain
-        <input value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="acme.com" />
-      </label>
-      <label>
-        YC slug <span className="muted">(ycombinator.com/companies/…)</span>
-        <input value={ycSlug} onChange={(e) => setYcSlug(e.target.value)} />
-      </label>
-      <div className="row">
+      {role !== undefined && (
         <label>
-          Job board
-          <select value={atsType} onChange={(e) => setAtsType(e.target.value as AtsType)}>
-            {ATS_TYPES.map((t) => (
-              <option key={t}>{t}</option>
+          Role
+          <input value={roleTitle} onChange={(e) => typed('role', setRoleTitle)(e.target.value)} placeholder="Optional" />
+        </label>
+      )}
+      {role !== undefined && (
+        <label>
+          Platform <span className="muted">(where you found it)</span>
+          <select value={platform} onChange={(e) => typed('platform', setPlatform)(e.target.value as RoleSource)}>
+            {ROLE_SOURCES.map((s) => (
+              <option key={s} value={s}>
+                {PLATFORM_LABELS[s]}
+              </option>
             ))}
           </select>
         </label>
-        <label className="grow">
-          Board token
-          <input value={atsToken} onChange={(e) => setAtsToken(e.target.value)} placeholder="acme" />
-        </label>
-      </div>
+      )}
+      <label>
+        Location
+        <input value={location} onChange={(e) => typed('location', setLocation)(e.target.value)} placeholder="San Francisco, CA / Remote" />
+      </label>
       <label>
         Visa sponsorship
-        <select value={sponsorship} onChange={(e) => setSponsorship(e.target.value as Sponsorship)}>
+        <select value={sponsorship} onChange={(e) => typed('sponsorship', setSponsorship)(e.target.value as Sponsorship)}>
           <option value="unknown">unknown</option>
           <option value="yes">yes</option>
           <option value="no">no</option>
@@ -132,11 +166,14 @@ export function CompanyForm({ companies, company, initial, onDone, onPickExistin
       {error && <p className="error">{error}</p>}
       <div className="row">
         <button type="submit" className="primary">
-          Save
+          {submitLabel ?? 'Save'}
         </button>
-        <button type="button" onClick={onCancel}>
-          Cancel
-        </button>
+        {actions}
+        {onCancel && (
+          <button type="button" onClick={onCancel}>
+            Cancel
+          </button>
+        )}
       </div>
     </form>
   );

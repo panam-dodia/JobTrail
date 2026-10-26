@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { parsePageContext } from '../lib/pageContext';
 import { db } from './index';
-import { addApplication, addNote, companyTimeline, createCompany, deleteCompany, findRole, linkPageToCompany, roleTitlesByCompany, saveRole, applyRepairs } from './repo';
+import { addApplication, addNote, companyTimeline, createCompany, deleteCompany, findRole, linkPageToCompany, roleTitlesByCompany, saveRole, applyRepairs, addOutreach, findOutreachByPerson } from './repo';
 import { planRepairs } from '../lib/repair';
 
 beforeEach(async () => {
@@ -75,6 +75,18 @@ describe('saveRole', () => {
   });
 });
 
+describe('findOutreachByPerson', () => {
+  it('finds outreach by profile URL or email, ignoring trailing slashes and query', async () => {
+    const hud = await createCompany({ name: 'HUD' });
+    const base = { companyId: hud, personName: 'Lorenss', channel: 'linkedin_connection' as const, status: 'sent' as const, notes: '' };
+    await addOutreach({ ...base, profileUrl: 'https://www.linkedin.com/in/lorenss/', sentAt: 1 });
+    await addOutreach({ ...base, channel: 'email', profileUrl: 'mailto:lorenss@hud.ai', sentAt: 2 });
+    expect((await findOutreachByPerson('https://www.linkedin.com/in/lorenss?mini=true')).map((o) => o.sentAt)).toEqual([1]);
+    expect((await findOutreachByPerson(undefined, 'Lorenss@hud.ai')).map((o) => o.sentAt)).toEqual([2]);
+    expect(await findOutreachByPerson()).toEqual([]);
+  });
+});
+
 describe('roleTitlesByCompany', () => {
   it('groups saved roles and typed application titles per company without duplicates', async () => {
     const stoa = await createCompany({ name: 'Stoa' });
@@ -83,7 +95,10 @@ describe('roleTitlesByCompany', () => {
     await addApplication({ companyId: stoa, roleTitle: 'Trader', platform: 'yc', appliedAt: 1, status: 'applied', notes: '' });
     await addApplication({ companyId: stoa, roleTitle: 'mts', platform: 'yc', appliedAt: 0, status: 'applied', notes: '' });
     const map = await roleTitlesByCompany();
-    expect(map.get(stoa)).toEqual(['MTS', 'Trader']);
+    expect(map.get(stoa)).toEqual([
+      { title: 'MTS', platform: 'yc' },
+      { title: 'Trader', platform: 'yc' },
+    ]);
   });
 });
 
@@ -103,7 +118,7 @@ describe('applyRepairs', () => {
     const stoa = companies[1]!;
     expect(stoa.id).toBe(mts);
     expect(stoa).toMatchObject({ ycSlug: 'stoa', sponsorship: 'yes' });
-    expect((await roleTitlesByCompany()).get(stoa.id)?.sort()).toEqual(['Marketing', 'Member of Technical Staff', 'Trader, Compute Markets']);
+    expect((await roleTitlesByCompany()).get(stoa.id)?.map((r) => r.title).sort()).toEqual(['Marketing', 'Member of Technical Staff', 'Trader, Compute Markets']);
     expect(await db.notes.where('companyId').equals(stoa.id).count()).toBe(1);
   });
 

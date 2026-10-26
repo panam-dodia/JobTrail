@@ -5,23 +5,26 @@ import type { Company } from '../../db/types';
 import { matchByName } from '../../lib/match';
 import type { PageContext } from '../../lib/pageContext';
 import type { PageFacts } from '../../lib/pageFacts';
+import { isPersonKind, type PageKind } from '../../lib/pageKind';
 import { guessCompanyName, roleSource } from '../format';
-import { CompanyForm } from './CompanyForm';
+import { CompanyForm, type PageRole } from './CompanyForm';
 import { CompanyPicker } from './CompanyPicker';
+import { PersonPanel } from './PersonPanel';
 import { RepairBanner } from './RepairBanner';
 import { Timeline } from './Timeline';
 
 interface Props {
   ctx?: PageContext;
   facts: PageFacts;
+  kind: PageKind;
   tabTitle?: string;
   companies: Company[];
   onOpenCompany: (id: number) => void;
 }
 
-type Mode = 'idle' | 'pick' | 'add';
+type Mode = 'idle' | 'pick';
 
-export function NoMatchView({ ctx, facts, tabTitle, companies, onOpenCompany }: Props) {
+export function NoMatchView({ ctx, facts, kind, tabTitle, companies, onOpenCompany }: Props) {
   const [mode, setMode] = useState<Mode>('idle');
   const [notice, setNotice] = useState<{ text: string; companyId: number } | null>(null);
   const recent = useLiveQuery(() => recentActivity(20), []);
@@ -32,20 +35,25 @@ export function NoMatchView({ ctx, facts, tabTitle, companies, onOpenCompany }: 
   const byName = guess.company ? matchByName(guess.company, companies) : { exact: [], candidates: [] };
   const suggestions = [...byName.exact, ...byName.candidates];
 
-  /** Files the role from this page's title under the company. */
-  async function rememberRole(companyId: number) {
-    if (ctx && guess.role) await saveRole(companyId, { title: guess.role, url: ctx.url, source: roleSource(ctx) });
+  // On a profile, message thread or email, the person is what gets logged.
+  const personPage = isPersonKind(kind);
+  const source = roleSource(ctx);
+  const pageRole = guess.role ? { title: guess.role, source } : undefined;
+
+  /** Files the role from this page under the company. */
+  async function rememberRole(companyId: number, role?: PageRole) {
+    if (ctx && role) await saveRole(companyId, { ...role, url: ctx.url });
   }
 
-  async function chooseExisting(company: Company) {
+  async function chooseExisting(company: Company, role = pageRole) {
     setMode('idle');
-    await rememberRole(company.id);
+    await rememberRole(company.id, role);
     if (ctx && hasIds) {
       const { conflicts } = await linkPageToCompany(company.id, ctx);
       if (conflicts.length) {
         // Stay here so the user sees why this page won't match next time.
         return setNotice({
-          text: `${company.name} already has a different ${conflicts.join(', ')}, so this page wasn't linked. Edit the company to change it.`,
+          text: `${company.name} already has a different ${conflicts.join(', ')}, so this page wasn't linked to it.`,
           companyId: company.id,
         });
       }
@@ -56,15 +64,20 @@ export function NoMatchView({ ctx, facts, tabTitle, companies, onOpenCompany }: 
   return (
     <div className="stack">
       <RepairBanner />
-      {ctx && (
+      {ctx && personPage &&
+        (facts.personName ? (
+          <PersonPanel facts={facts} ctx={ctx} companies={companies} onLogged={onOpenCompany} />
+        ) : (
+          <section className="card">
+            <p className="muted small">
+              {kind === 'email' ? 'Open an email or draft to log outreach.' : 'Open a profile or conversation to log outreach.'}
+            </p>
+          </section>
+        ))}
+      {ctx && !personPage && (
         <section className="card">
           <p className="muted small">This page</p>
           <p className="host">{ctx.host}</p>
-          {guess.role && (
-            <p>
-              Role: <strong>{guess.role}</strong>
-            </p>
-          )}
           {mode === 'idle' && suggestions.length > 0 && (
             <div className="ask-inline">
               <p>
@@ -81,17 +94,33 @@ export function NoMatchView({ ctx, facts, tabTitle, companies, onOpenCompany }: 
           )}
           {mode === 'idle' && (
             <>
-              <p className="small">
+              <p className="muted small">
                 {hasIds
-                  ? 'Not linked to a company yet.'
-                  : "Pages on this site can't be matched automatically yet. Pick the company to log against it."}
+                  ? 'Not linked to a company yet. Check the details and log it, or pick a company you already track.'
+                  : "Pages on this site can't be matched automatically yet. Check the details and log it, or pick a company you already track."}
               </p>
-              <div className="row">
-                <button className="primary" onClick={() => setMode('add')}>
-                  Log this: new company
-                </button>
-                {companies.length > 0 && <button onClick={() => setMode('pick')}>Existing company…</button>}
-              </div>
+              <CompanyForm
+                embedded
+                title="Details from this page"
+                submitLabel="Log this"
+                companies={companies}
+                role={guess.role ?? ''}
+                source={source}
+                initial={{
+                  // A tab title like "Feed | LinkedIn" is no company name; only guess when the page names one.
+                  name: facts.companyName ?? (hasIds || ctx.domain ? guessCompanyName(ctx, tabTitle) : ''),
+                  ...pageIdentifiers(ctx),
+                  ...(facts.domain && { domain: facts.domain }),
+                  ...(facts.location && { location: facts.location }),
+                  ...(facts.sponsorship && { sponsorship: facts.sponsorship }),
+                }}
+                actions={companies.length > 0 && <button type="button" onClick={() => setMode('pick')}>Existing company…</button>}
+                onDone={async (id, role) => {
+                  await rememberRole(id, role);
+                  onOpenCompany(id);
+                }}
+                onPickExisting={(c, role) => void chooseExisting(c, role)}
+              />
             </>
           )}
           {mode === 'pick' && (
@@ -112,24 +141,6 @@ export function NoMatchView({ ctx, facts, tabTitle, companies, onOpenCompany }: 
             Dismiss
           </button>
         </p>
-      )}
-      {mode === 'add' && (
-        <CompanyForm
-          companies={companies}
-          initial={{
-            name: facts.companyName ?? guessCompanyName(ctx, tabTitle),
-            ...(ctx ? pageIdentifiers(ctx) : {}),
-            ...(facts.domain && { domain: facts.domain }),
-            ...(facts.sponsorship && { sponsorship: facts.sponsorship }),
-          }}
-          onDone={async (id) => {
-            setMode('idle');
-            await rememberRole(id);
-            onOpenCompany(id);
-          }}
-          onPickExisting={(c) => void chooseExisting(c)}
-          onCancel={() => setMode('idle')}
-        />
       )}
 
       {!!unseen?.length && (

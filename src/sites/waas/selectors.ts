@@ -14,6 +14,9 @@ export const WAAS = {
     { pattern: /us citizens?(hip)?\s*\/\s*visa not required/i, value: 'yes' },
     { pattern: /will sponsor/i, value: 'yes' },
   ] satisfies { pattern: RegExp; value: Sponsorship }[],
+  /** Location tags: "San Francisco, CA, US", "London, UK / Remote", "Remote (US)". */
+  location: [/^[A-Z][\p{L} .'-]+, [A-Z]{2,3}\b/u, /^remote\b/i],
+
   /** Labels are short; longer text is job description prose and is ignored. */
   maxLabelLength: 60,
   labelSelector: 'span, div, li, p, a',

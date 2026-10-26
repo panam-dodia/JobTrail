@@ -2,7 +2,7 @@ import type { PageContext } from '../lib/pageContext';
 import type { RepairPlan } from '../lib/repair';
 import { buildTimeline, type TimelineItem } from '../lib/timeline';
 import { db } from './index';
-import type { Application, Company, Outreach, Role } from './types';
+import type { Application, Company, Outreach, Platform, Role } from './types';
 
 export type NewCompany = Pick<Company, 'name'> & Partial<Omit<Company, 'id' | 'name' | 'createdAt'>>;
 
@@ -95,27 +95,46 @@ export async function saveRole(companyId: number, role: Pick<Role, 'title' | 'ur
   return db.roles.add({ companyId, ...role, title: role.title.trim(), firstSeen: now, lastSeen: now, open: true });
 }
 
+export interface RoleTitle {
+  title: string;
+  /** Where the role was found (saved roles) or applied (typed application titles). */
+  platform: Platform;
+}
+
 /** Role titles per company, newest first: saved roles plus titles typed into applications. */
-export async function roleTitlesByCompany(): Promise<Map<number, string[]>> {
+export async function roleTitlesByCompany(): Promise<Map<number, RoleTitle[]>> {
   const [roles, applications] = await Promise.all([db.roles.toArray(), db.applications.toArray()]);
   const entries = [
-    ...roles.map((r) => ({ companyId: r.companyId, title: r.title, at: r.firstSeen })),
-    ...applications.flatMap((a) => (a.roleTitle && a.roleId === undefined ? [{ companyId: a.companyId, title: a.roleTitle, at: a.appliedAt }] : [])),
+    ...roles.map((r) => ({ companyId: r.companyId, title: r.title, platform: r.source, at: r.firstSeen })),
+    ...applications.flatMap((a) =>
+      a.roleTitle && a.roleId === undefined ? [{ companyId: a.companyId, title: a.roleTitle, platform: a.platform, at: a.appliedAt }] : [],
+    ),
   ].sort((a, b) => b.at - a.at);
 
-  const byCompany = new Map<number, string[]>();
+  const byCompany = new Map<number, RoleTitle[]>();
   const seen = new Set<string>();
   for (const e of entries) {
     const key = `${e.companyId}:${normalizeTitle(e.title)}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    byCompany.set(e.companyId, [...(byCompany.get(e.companyId) ?? []), e.title]);
+    byCompany.set(e.companyId, [...(byCompany.get(e.companyId) ?? []), { title: e.title, platform: e.platform }]);
   }
   return byCompany;
 }
 
 export const addApplication = (a: Omit<Application, 'id'>) => db.applications.add(a);
 export const addOutreach = (o: Omit<Outreach, 'id'>) => db.outreach.add(o);
+export const updateOutreach = (id: number, changes: Partial<Outreach>) => db.outreach.update(id, changes);
+
+const personKey = (url?: string) => url?.toLowerCase().replace(/[?#].*$/, '').replace(/\/+$/, '') || undefined;
+
+/** Outreach already logged to this person (same profile URL or email), newest first. */
+export async function findOutreachByPerson(profileUrl?: string, email?: string): Promise<Outreach[]> {
+  const keys = new Set([personKey(profileUrl), personKey(email && `mailto:${email}`)].filter(Boolean));
+  if (!keys.size) return [];
+  const all = await db.outreach.toArray();
+  return all.filter((o) => keys.has(personKey(o.profileUrl))).sort((a, b) => b.sentAt - a.sentAt);
+}
 export const addNote = (companyId: number, text: string) =>
   db.notes.add({ companyId, text: text.trim(), createdAt: Date.now() });
 

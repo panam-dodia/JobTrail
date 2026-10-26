@@ -8,6 +8,11 @@ export function fmtDate(ms: number): string {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', ...(sameYear ? {} : { year: 'numeric' }) });
 }
 
+/** "Oct 25, 4:12 PM". */
+export function fmtDateTime(ms: number): string {
+  return `${fmtDate(ms)}, ${new Date(ms).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`;
+}
+
 export function toDateInput(ms: number): string {
   const d = new Date(ms);
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -26,10 +31,18 @@ export const PLATFORM_LABELS: Record<Platform, string> = {
   yc: 'YC / WaaS',
   linkedin: 'LinkedIn',
   glassdoor: 'Glassdoor',
-  careers_page: 'Careers page',
+  careers_page: 'Company site',
   greenhouse: 'Greenhouse',
   lever: 'Lever',
   ashby: 'Ashby',
+  gem: 'Gem',
+  workable: 'Workable',
+  rippling: 'Rippling',
+  smartrecruiters: 'SmartRecruiters',
+  bamboohr: 'BambooHR',
+  recruitee: 'Recruitee',
+  breezy: 'Breezy',
+  teamtailor: 'Teamtailor',
   email: 'Email',
   other: 'Other',
 };
@@ -44,25 +57,15 @@ export const CHANNEL_LABELS: Record<OutreachChannel, string> = {
 export const label = (s: string) => s.replace(/_/g, ' ');
 
 export function defaultPlatform(ctx?: PageContext): Platform {
-  switch (ctx?.site) {
-    case 'waas':
-    case 'yc':
-      return 'yc';
-    case 'linkedin':
-    case 'glassdoor':
-    case 'greenhouse':
-    case 'lever':
-    case 'ashby':
-      return ctx.site;
-    case 'other':
-      return 'careers_page';
-    default:
-      return 'other';
-  }
+  if (!ctx) return 'other';
+  if (ctx.site === 'waas') return 'yc';
+  if (ctx.site === 'gmail') return 'email';
+  if (ctx.site === 'other') return 'careers_page';
+  return ctx.site;
 }
 
 export function defaultChannel(ctx?: PageContext): OutreachChannel {
-  if (ctx?.site === 'linkedin') return 'linkedin_connection';
+  if (ctx?.site === 'linkedin') return ctx.url.includes('/messaging') ? 'linkedin_message' : 'linkedin_connection';
   if (ctx?.site === 'waas' || ctx?.site === 'yc') return 'yc_message';
   return 'email';
 }
