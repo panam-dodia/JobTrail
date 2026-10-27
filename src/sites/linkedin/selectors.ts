@@ -48,6 +48,17 @@ export const LINKEDIN = {
     minHeadlineLength: 12,
   },
 
+  /** The connection invite dialog ("Add a note to your invitation?"). */
+  invite: {
+    dialog: '[role="dialog"], [role="alertdialog"], dialog',
+    /** "Send", "Send now", "Send invitation", "Send without a note". */
+    send: /^send( now| invitation| without a note)?$/i,
+    note: 'textarea',
+    /** How long to wait for the profile's button to turn into "Pending" after Send. */
+    confirmMs: 8000,
+    pollMs: 400,
+  },
+
   messagingPath: /^\/messaging/,
   /** The open conversation's header. */
   messaging: {

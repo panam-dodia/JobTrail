@@ -1,17 +1,17 @@
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import { db } from '../../db';
-import { addNote, companyTimeline, deleteCompany, saveRole, updateCompany } from '../../db/repo';
+import { addNote, companyTimeline, deleteCompany, updateCompany } from '../../db/repo';
 import type { Application, Company, Note, Outreach, Sponsorship } from '../../db/types';
 import { displayName } from '../../lib/companyName';
 import type { PageContext } from '../../lib/pageContext';
 import type { PageFacts } from '../../lib/pageFacts';
 import { isPersonKind, type PageKind } from '../../lib/pageKind';
-import { PLATFORM_LABELS, fmtDate, roleSource } from '../format';
+import { fmtDate } from '../format';
 import { Activity } from './Activity';
 import { CompanyForm } from './CompanyForm';
-import { ApplicationForm, OutreachForm } from './LogForms';
 import { PersonPanel } from './PersonPanel';
+import { Roles } from './Roles';
 
 interface Props {
   company: Company;
@@ -27,13 +27,13 @@ interface Props {
   kind?: PageKind;
   onBack?: () => void;
   onDeleted: () => void;
+  /** Opens this company in the Companies tab, where everything about it can be edited. */
+  onEditInCompanies?: () => void;
 }
 
-type Panel = 'none' | 'application' | 'outreach' | 'edit';
+type Panel = 'none' | 'edit';
 
-const sameTitle = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
-
-export function CompanyView({ company, companies, ctx, facts, matchedByPage, kind, onBack, onDeleted }: Props) {
+export function CompanyView({ company, companies, ctx, facts, matchedByPage, kind, onBack, onDeleted, onEditInCompanies }: Props) {
   const items = useLiveQuery(() => companyTimeline(company.id), [company.id]);
   const roles = useLiveQuery(() => db.roles.where('companyId').equals(company.id).reverse().sortBy('firstSeen'), [company.id]);
   const [panel, setPanel] = useState<Panel>('none');
@@ -41,9 +41,12 @@ export function CompanyView({ company, companies, ctx, facts, matchedByPage, kin
   const applications = (items ?? []).filter((i) => i.kind === 'application').map((i) => i.record as Application);
   const notes = (items ?? []).filter((i) => i.kind === 'note').map((i) => i.record as Note);
   const pageRole = ctx ? facts?.roleTitle : undefined;
-  const pageRoleSaved = !pageRole || (roles ?? []).some((r) => r.url === ctx?.url || sameTitle(r.title, pageRole));
-  const applied = (roleId: number, title: string) =>
-    applications.some((a) => a.roleId === roleId || (a.roleTitle && sameTitle(a.roleTitle, title)));
+  const pageRoles = [
+    ...(ctx && pageRole ? [{ title: pageRole, url: ctx.url }] : []),
+    ...(ctx && kind === 'company' ? (facts?.listedRoles ?? []) : []),
+  ];
+  // On the page's own company, details are only filled in here; editing happens in the Companies tab.
+  const compact = !!matchedByPage;
   // Details on the page that this company is still missing. Never overwrites what's already set.
   const fill: Partial<Company> = {
     ...(facts?.sponsorship && company.sponsorship === 'unknown' && { sponsorship: facts.sponsorship }),
@@ -91,12 +94,21 @@ export function CompanyView({ company, companies, ctx, facts, matchedByPage, kin
         )}
         <div className="title-row">
           <h2>{displayName(company)}</h2>
-          <button className="btn-ghost btn-sm" onClick={() => setPanel('edit')}>
-            Edit
-          </button>
+          {!compact && (
+            <button className="btn-ghost btn-sm" onClick={() => setPanel('edit')}>
+              Edit
+            </button>
+          )}
         </div>
         <div className="meta-row">
           {company.location && <span className="meta">{company.location}</span>}
+          {compact ? (
+            company.sponsorship !== 'unknown' && (
+              <span className={`meta pill-static sponsor-${company.sponsorship}`}>
+                {company.sponsorship === 'yes' ? 'Sponsors visas' : 'No sponsorship'}
+              </span>
+            )
+          ) : (
           <label className="meta">
             Visa
             <select
@@ -109,6 +121,7 @@ export function CompanyView({ company, companies, ctx, facts, matchedByPage, kin
               <option value="no">No sponsorship</option>
             </select>
           </label>
+          )}
           <label className="meta">
             <input
               type="checkbox"
@@ -123,24 +136,20 @@ export function CompanyView({ company, companies, ctx, facts, matchedByPage, kin
         )}
       </header>
 
-      {panel === 'none' && (
+      {!compact && (
         <DeleteBar
           name={company.name}
           onDelete={async () => {
             await deleteCompany(company.id);
             onDeleted();
           }}
-        >
-          <button onClick={() => setPanel('application')}>+ Application</button>
-          <button onClick={() => setPanel('outreach')}>+ Outreach</button>
-        </DeleteBar>
+        />
       )}
-      {panel === 'application' && (
-        <ApplicationForm companyId={company.id} ctx={ctx} defaultRole={pageRole} onDone={() => setPanel('none')} />
-      )}
-      {panel === 'outreach' && <OutreachForm companyId={company.id} ctx={ctx} onDone={() => setPanel('none')} />}
 
-      {fillLabels.length > 0 && (
+      {compact && (
+        <MissingDetails key={company.id} company={company} suggested={fill} onEditInCompanies={onEditInCompanies} />
+      )}
+      {!compact && fillLabels.length > 0 && (
         <div className="callout">
           <p className="grow">From this page: {fillLabels.join(', ')}</p>
           <button className="primary btn-sm" onClick={() => updateCompany(company.id, fill)}>
@@ -151,43 +160,16 @@ export function CompanyView({ company, companies, ctx, facts, matchedByPage, kin
 
       {person && <PersonPanel facts={person} ctx={ctx} companies={companies} company={company} onLogged={() => undefined} />}
 
-      <Activity outreach={outreach} applications={applications} roles={roles ?? []} />
+      <Activity
+        companyId={company.id}
+        outreach={outreach}
+        applications={applications}
+        roles={roles ?? []}
+        ctx={ctx}
+        pageRole={pageRole}
+      />
 
-      <section className="section">
-        <h3 className="section-title">Roles</h3>
-        {ctx && pageRole && !pageRoleSaved && (
-          <div className="callout">
-            <p className="grow">
-              On this page: <strong>{pageRole}</strong>
-            </p>
-            <button
-              className="primary btn-sm"
-              onClick={() => saveRole(company.id, { title: pageRole, url: ctx.url, source: roleSource(ctx) })}
-            >
-              Save role
-            </button>
-          </div>
-        )}
-        {roles?.length ? (
-          <ul className="list">
-            {roles.map((r) => (
-              <li key={r.id} className="list-row">
-                {r.url ? (
-                  <a className="grow" href={r.url} target="_blank" rel="noreferrer">
-                    {r.title}
-                  </a>
-                ) : (
-                  <span className="grow">{r.title}</span>
-                )}
-                {applied(r.id, r.title) && <span className="tag tag-green">Applied</span>}
-                <span className="muted small">{PLATFORM_LABELS[r.source]}</span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          !pageRole && <p className="empty">No roles saved yet.</p>
-        )}
-      </section>
+      <Roles companyId={company.id} roles={roles ?? []} applications={applications} ctx={ctx} pageRoles={pageRoles} />
 
       <section className="section">
         <h3 className="section-title">Notes</h3>
@@ -244,8 +226,8 @@ function QuickNote({ companyId }: { companyId: number }) {
   );
 }
 
-/** The page's actions, with a Delete that asks before removing the company and everything logged for it. */
-function DeleteBar({ name, onDelete, children }: { name: string; onDelete: () => void; children: ReactNode }) {
+/** Delete, which asks before removing the company and everything logged for it. */
+function DeleteBar({ name, onDelete }: { name: string; onDelete: () => void }) {
   const [confirming, setConfirming] = useState(false);
   if (confirming) {
     return (
@@ -262,10 +244,92 @@ function DeleteBar({ name, onDelete, children }: { name: string; onDelete: () =>
   }
   return (
     <div className="toolbar">
-      {children}
       <button className="btn-ghost danger-text" onClick={() => setConfirming(true)}>
-        Delete
+        Delete company
       </button>
     </div>
+  );
+}
+
+/**
+ * The company details still blank (location, visa), filled from the page where it can, to save here.
+ * Once none are blank, says so and points to the Companies tab for edits.
+ */
+function MissingDetails({ company, suggested, onEditInCompanies }: { company: Company; suggested: Partial<Company>; onEditInCompanies?: () => void }) {
+  const needsLocation = !company.location;
+  const needsVisa = company.sponsorship === 'unknown';
+  const [location, setLocation] = useState(suggested.location ?? '');
+  const [visa, setVisa] = useState<Sponsorship>(suggested.sponsorship ?? 'unknown');
+  // Follow the page until typed in, like the other forms.
+  const [touched, setTouched] = useState(false);
+  useEffect(() => {
+    if (touched) return;
+    if (suggested.location) setLocation(suggested.location);
+    if (suggested.sponsorship) setVisa(suggested.sponsorship);
+  }, [suggested.location, suggested.sponsorship, touched]);
+
+  if (!needsLocation && !needsVisa) {
+    return (
+      <p className="all-saved">
+        <span className="ok">✓</span>
+        <span className="grow">All details saved.</span>
+        {onEditInCompanies && (
+          <button className="link small" onClick={onEditInCompanies}>
+            Edit in Companies →
+          </button>
+        )}
+      </p>
+    );
+  }
+  const changes: Partial<Company> = {
+    ...(needsLocation && location.trim() && { location: location.trim() }),
+    ...(needsVisa && visa !== 'unknown' && { sponsorship: visa }),
+  };
+  return (
+    <form
+      className="missing form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void updateCompany(company.id, changes);
+      }}
+    >
+      <p className="small muted">Missing details{Object.keys(suggested).length ? ', filled from this page where possible' : ''}:</p>
+      <div className="row">
+        {needsLocation && (
+          <label className="grow">
+            Location
+            <input
+              value={location}
+              onChange={(e) => {
+                setTouched(true);
+                setLocation(e.target.value);
+              }}
+              placeholder="San Francisco, CA"
+            />
+          </label>
+        )}
+        {needsVisa && (
+          <label className="grow">
+            Visa
+            <select
+              value={visa}
+              onChange={(e) => {
+                setTouched(true);
+                setVisa(e.target.value as Sponsorship);
+              }}
+            >
+              <option value="unknown">Unknown</option>
+              <option value="yes">Sponsors</option>
+              <option value="no">No sponsorship</option>
+            </select>
+          </label>
+        )}
+      </div>
+      <div className="row">
+        <button type="submit" className="primary btn-sm" disabled={!Object.keys(changes).length}>
+          Save details
+        </button>
+      </div>
+    </form>
   );
 }

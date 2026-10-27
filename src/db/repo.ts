@@ -79,7 +79,7 @@ export async function deleteCompany(id: number): Promise<void> {
 export async function findRole(companyId: number, title?: string, url?: string): Promise<Role | undefined> {
   const key = title ? normalizeTitle(title) : undefined;
   const roles = await db.roles.where('companyId').equals(companyId).toArray();
-  return roles.find((r) => r.url === url) ?? (key ? roles.find((r) => normalizeTitle(r.title) === key) : undefined);
+  return (url ? roles.find((r) => r.url === url) : undefined) ??(key ? roles.find((r) => normalizeTitle(r.title) === key) : undefined);
 }
 
 const normalizeTitle = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -93,6 +93,26 @@ export async function saveRole(companyId: number, role: Pick<Role, 'title' | 'ur
     return existing.id;
   }
   return db.roles.add({ companyId, ...role, title: role.title.trim(), firstSeen: now, lastSeen: now, open: true });
+}
+
+export const updateRole = (id: number, changes: Partial<Pick<Role, 'title' | 'url' | 'source'>>) => db.roles.update(id, changes);
+
+/** Removes a role. Applications and outreach about it keep its title as text; its events go. */
+export async function deleteRole(id: number): Promise<void> {
+  await db.transaction('rw', [db.roles, db.applications, db.outreach, db.events], async () => {
+    const role = await db.roles.get(id);
+    if (!role) return;
+    await db.applications.where('roleId').equals(id).modify((a) => {
+      a.roleTitle = role.title;
+      delete a.roleId;
+    });
+    await db.outreach.filter((o) => o.roleId === id).modify((o) => {
+      o.roleTitle = role.title;
+      delete o.roleId;
+    });
+    await db.events.where('roleId').equals(id).delete();
+    await db.roles.delete(id);
+  });
 }
 
 export interface RoleTitle {

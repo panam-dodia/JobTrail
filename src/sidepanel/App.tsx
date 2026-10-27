@@ -88,7 +88,22 @@ export function App() {
       </div>
     );
   } else if (matched) {
-    content = <CompanyView key={matched.id} company={matched} companies={companies} ctx={ctx} facts={facts} kind={kind} matchedByPage onDeleted={back} />;
+    content = (
+      <CompanyView
+        key={matched.id}
+        company={matched}
+        companies={companies}
+        ctx={ctx}
+        facts={facts}
+        kind={kind}
+        matchedByPage
+        onDeleted={back}
+        onEditInCompanies={() => {
+          setView('companies');
+          open(matched.id);
+        }}
+      />
+    );
   } else {
     content = <NoMatchView key={tab.url} ctx={ctx} facts={facts} kind={kind} tabTitle={tab.title} companies={companies} onOpenCompany={open} />;
   }

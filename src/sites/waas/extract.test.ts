@@ -52,6 +52,19 @@ describe('extractWaas', () => {
     expect(extractWaas(page('<div><span>Remote (US)</span><span>Full-time</span></div>')).location).toBe('Remote (US)');
   });
 
+  it('lists the jobs on a company page, named by their title links', () => {
+    const html = `
+      <h1>CloudCruise <span>(W24)</span></h1>
+      <h2>Jobs at CloudCruise</h2>
+      <div><a href="/jobs/81234">Member of Technical Staff</a><span>San Francisco, CA, US</span><a href="/jobs/81234">View job</a></div>
+      <div><a href="/jobs/81240">View job</a><a href="/jobs/81240">Founding Designer</a></div>`;
+    const listed = extractWaas(page(html)).listedRoles?.map((r) => ({ ...r, url: new URL(r.url).pathname }));
+    expect(listed).toEqual([
+      { title: 'Member of Technical Staff', url: '/jobs/81234' },
+      { title: 'Founding Designer', url: '/jobs/81240' },
+    ]);
+  });
+
   it('picks up an ATS board link', () => {
     const facts = extractWaas(page('<a href="https://jobs.ashbyhq.com/stoa/123">Apply on our site</a>'));
     expect(facts.ats).toEqual({ type: 'ashby', token: 'stoa' });

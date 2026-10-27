@@ -1,3 +1,4 @@
+import { useLiveQuery } from 'dexie-react-hooks';
 import { useState } from 'react';
 import { db } from '../../db';
 import {
@@ -13,6 +14,10 @@ import {
   type Platform,
   type Role,
 } from '../../db/types';
+import { displayName } from '../../lib/companyName';
+import { roleFromNote } from '../../lib/noteRole';
+import type { PageContext } from '../../lib/pageContext';
+import { ApplicationForm, OutreachForm } from './LogForms';
 import { ACTIVITY_CHANNELS, activity, type ActivityChannel, type ActivityEntry } from '../../lib/timeline';
 import { APPLIED_VIA_LABELS, CHANNEL_LABELS, PLATFORM_LABELS, fmtDate, fromDateInput, label, toDateInput } from '../format';
 
@@ -35,26 +40,51 @@ export function outreachStatusLabel(o: Pick<Outreach, 'channel'>, status: Outrea
 }
 
 interface Props {
+  companyId: number;
   outreach: Outreach[];
   applications: Application[];
   roles: Role[];
+  ctx?: PageContext;
+  /** The job open in the tab, suggested when logging an application. */
+  pageRole?: string;
 }
 
-/** One row per channel: was it done, by whom, when, and where it stands. */
-export function Activity({ outreach, applications, roles }: Props) {
+const CHANNEL_KINDS: Record<Exclude<ActivityChannel, 'applied'>, OutreachChannel[]> = {
+  yc: ['yc_message'],
+  linkedin: ['linkedin_connection', 'linkedin_message'],
+  email: ['email'],
+};
+
+/** One row per channel: was it done, by whom, when, and where it stands. Each row can log more. */
+export function Activity({ companyId, outreach, applications, roles, ctx, pageRole }: Props) {
   const byChannel = activity(outreach, applications, roles);
+  const [adding, setAdding] = useState<ActivityChannel | null>(null);
+  const done = () => setAdding(null);
   return (
     <section className="section">
       <h3 className="section-title">Activity</h3>
       <dl className="activity">
         {ACTIVITY_CHANNELS.map((ch) => (
           <div key={ch} className="activity-row">
-            <dt>{CHANNEL_TITLES[ch]}</dt>
+            <dt>
+              {CHANNEL_TITLES[ch]}
+              {adding !== ch && (
+                <button className="link add-btn" onClick={() => setAdding(ch)}>
+                  + Add
+                </button>
+              )}
+            </dt>
             <dd>
+              {adding === ch &&
+                (ch === 'applied' ? (
+                  <ApplicationForm companyId={companyId} ctx={ctx} roles={roles} defaultRole={pageRole} onDone={done} />
+                ) : (
+                  <OutreachForm companyId={companyId} ctx={ctx} roles={roles} channels={CHANNEL_KINDS[ch]} onDone={done} />
+                ))}
               {byChannel[ch].length ? (
-                byChannel[ch].map((e) => <Entry key={`${e.kind}-${e.record.id}`} entry={e} />)
+                byChannel[ch].map((e) => <Entry key={`${e.kind}-${e.record.id}`} entry={e} roles={roles} />)
               ) : (
-                <span className="empty">Not yet</span>
+                adding !== ch && <span className="empty">Not yet</span>
               )}
             </dd>
           </div>
@@ -65,11 +95,11 @@ export function Activity({ outreach, applications, roles }: Props) {
 }
 
 /** Name on top; status, details and date underneath; notes last. Edits in place. */
-function Entry({ entry }: { entry: ActivityEntry }) {
+function Entry({ entry, roles }: { entry: ActivityEntry; roles: Role[] }) {
   const [editing, setEditing] = useState(false);
   if (editing) {
     return entry.kind === 'outreach' ? (
-      <EditOutreach o={entry.record} onClose={() => setEditing(false)} />
+      <EditOutreach o={entry.record} role={entry.role} roles={roles} onClose={() => setEditing(false)} />
     ) : (
       <EditApplication a={entry.record} role={entry.role} onClose={() => setEditing(false)} />
     );
@@ -78,6 +108,7 @@ function Entry({ entry }: { entry: ActivityEntry }) {
   if (entry.kind === 'outreach') {
     const o = entry.record;
     const kind = o.channel === 'linkedin_message' ? 'Message' : o.channel === 'linkedin_connection' ? 'Connection request' : undefined;
+    const about = entry.role?.title ?? o.roleTitle;
     return (
       <div className="entry">
         <div className="entry-line">
@@ -99,7 +130,7 @@ function Entry({ entry }: { entry: ActivityEntry }) {
             labelOf={(s) => outreachStatusLabel(o, s)}
             onChange={(s) => db.outreach.update(o.id, { status: s })}
           />
-          <span>{[o.personTitle, kind, fmtDate(o.sentAt)].filter(Boolean).join(' · ')}</span>
+          <span>{[o.personTitle, kind, about && `re: ${about}`, fmtDate(o.sentAt)].filter(Boolean).join(' · ')}</span>
         </div>
         {o.notes && <p className="entry-notes">{o.notes}</p>}
       </div>
@@ -134,20 +165,30 @@ function Entry({ entry }: { entry: ActivityEntry }) {
 // Keep the original time when the day didn't change, so same-day order holds.
 const keepTime = (original: number, date: string) => (date === toDateInput(original) ? original : fromDateInput(date));
 
-function EditOutreach({ o, onClose }: { o: Outreach; onClose: () => void }) {
+function EditOutreach({ o, role, roles, onClose }: { o: Outreach; role?: Role; roles: Role[]; onClose: () => void }) {
+  const originalRole = role?.title ?? o.roleTitle ?? '';
+  const [roleTitle, setRoleTitle] = useState(originalRole);
   const [personName, setPersonName] = useState(o.personName);
   const [personTitle, setPersonTitle] = useState(o.personTitle ?? '');
   const [channel, setChannel] = useState<OutreachChannel>(o.channel);
   const [date, setDate] = useState(toDateInput(o.sentAt));
   const [status, setStatus] = useState<OutreachStatus>(o.status);
   const [notes, setNotes] = useState(o.notes);
+  const [companyId, setCompanyId] = useState(o.companyId);
   return (
     <form
       className="form entry-edit"
       onSubmit={async (e) => {
         e.preventDefault();
         if (!personName.trim()) return;
+        const title = roleTitle.trim();
+        const moved = companyId !== o.companyId;
         await db.outreach.update(o.id, {
+          // A renamed role, or one at another company, no longer points at the saved one;
+          // with no role, the notes may name one.
+          ...((title !== originalRole || moved) && { roleTitle: title || undefined, roleId: undefined }),
+          ...(!title && !moved && roleFromNote(notes, roles)),
+          companyId,
           personName: personName.trim(),
           personTitle: personTitle.trim() || undefined,
           channel,
@@ -184,6 +225,11 @@ function EditOutreach({ o, onClose }: { o: Outreach; onClose: () => void }) {
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         </label>
       </div>
+      <CompanySelect value={companyId} onChange={setCompanyId} />
+      <label>
+        About role <span className="muted">(blank: read from the notes)</span>
+        <input value={roleTitle} onChange={(e) => setRoleTitle(e.target.value)} />
+      </label>
       <label>
         Status
         <select value={status} onChange={(e) => setStatus(e.target.value as OutreachStatus)}>
@@ -210,15 +256,18 @@ function EditApplication({ a, role, onClose }: { a: Application; role?: Role; on
   const [date, setDate] = useState(toDateInput(a.appliedAt));
   const [status, setStatus] = useState<ApplicationStatus>(a.status);
   const [notes, setNotes] = useState(a.notes);
+  const [companyId, setCompanyId] = useState(a.companyId);
   return (
     <form
       className="form entry-edit"
       onSubmit={async (e) => {
         e.preventDefault();
         const title = roleTitle.trim();
+        const moved = companyId !== a.companyId;
         await db.applications.update(a.id, {
-          // A renamed role no longer points at the saved one.
-          ...(title !== original && { roleTitle: title || undefined, roleId: undefined }),
+          // A renamed role, or one at another company, no longer points at the saved one.
+          ...((title !== original || moved) && { roleTitle: title || undefined, roleId: undefined }),
+          companyId,
           platform,
           appliedAt: keepTime(a.appliedAt, date),
           status,
@@ -231,6 +280,7 @@ function EditApplication({ a, role, onClose }: { a: Application; role?: Role; on
         Role
         <input value={roleTitle} onChange={(e) => setRoleTitle(e.target.value)} autoFocus />
       </label>
+      <CompanySelect value={companyId} onChange={setCompanyId} />
       <div className="row">
         <label>
           Applied via
@@ -266,7 +316,24 @@ function EditApplication({ a, role, onClose }: { a: Application; role?: Role; on
   );
 }
 
-function EditButtons({ onCancel }: { onCancel: () => void }) {
+/** Moves an entry to another company, e.g. when it was filed under the wrong one. */
+function CompanySelect({ value, onChange }: { value: number; onChange: (id: number) => void }) {
+  const companies = useLiveQuery(() => db.companies.orderBy('name').toArray(), []);
+  return (
+    <label>
+      Company
+      <select value={value} onChange={(e) => onChange(Number(e.target.value))}>
+        {(companies ?? []).map((c) => (
+          <option key={c.id} value={c.id}>
+            {displayName(c)}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+export function EditButtons({ onCancel }: { onCancel: () => void }) {
   return (
     <div className="row">
       <button type="submit" className="primary btn-sm">
@@ -297,7 +364,7 @@ export function StatusSelect<S extends string>(props: { value: S; options: S[]; 
 }
 
 /** Edit and delete; delete asks first. */
-function EntryActions({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => unknown }) {
+export function EntryActions({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => unknown }) {
   const [confirming, setConfirming] = useState(false);
   return confirming ? (
     <span className="confirm">

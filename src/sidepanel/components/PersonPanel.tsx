@@ -4,6 +4,9 @@ import { addOutreach, createCompany, findOutreachByPerson, linkPageToCompany, up
 import { OUTREACH_CHANNELS, OUTREACH_STATUSES, type Company, type OutreachChannel, type OutreachStatus } from '../../db/types';
 import { displayName, splitNames } from '../../lib/companyName';
 import { matchByName } from '../../lib/match';
+import { draftKey } from '../../lib/messages';
+import { roleFromNote } from '../../lib/noteRole';
+import { db } from '../../db';
 import type { PageContext } from '../../lib/pageContext';
 import type { PageFacts } from '../../lib/pageFacts';
 import { CHANNEL_LABELS, defaultChannel, fmtDate, label } from '../format';
@@ -113,6 +116,18 @@ function PersonForm({ facts, ctx, contact, companies, company, onLogged }: Props
   const [channel, setChannel] = useState<OutreachChannel>(defaultChannel(ctx));
   const [status, setStatus] = useState<OutreachStatus>(facts.connection === 'connected' ? 'accepted' : 'sent');
   const [notes, setNotes] = useState(facts.emailSubject ? `Subject: ${facts.emailSubject}` : '');
+  // A connection note captured on LinkedIn whose company wasn't certain waits here.
+  const draft = facts.profileUrl ? draftKey(facts.profileUrl) : undefined;
+  useEffect(() => {
+    if (!draft) return;
+    chrome.storage.session
+      .get(draft)
+      .then((got) => {
+        const note = got[draft];
+        if (typeof note === 'string' && note) setNotes((n) => n || note);
+      })
+      .catch(() => {});
+  }, [draft]);
   const [possibleDupes, setPossibleDupes] = useState<Company[] | null>(null);
   const [error, setError] = useState('');
 
@@ -156,7 +171,9 @@ function PersonForm({ facts, ctx, contact, companies, company, onLogged }: Props
       sentAt: Date.now(),
       status,
       notes: notes.trim(),
+      ...roleFromNote(notes, await db.roles.where('companyId').equals(id).toArray()),
     });
+    if (draft) await chrome.storage.session.remove(draft).catch(() => {});
     onLogged(id);
   }
 

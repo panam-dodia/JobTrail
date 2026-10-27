@@ -7,6 +7,8 @@ export function normalizeName(name: string): string {
     .normalize('NFKD')
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
+    // LinkedIn names YC companies with their batch: "CloudCruise (YC W24)".
+    .replace(/\(\s*yc\s+[a-z]+\s*'?\d{2,4}\s*\)/g, ' ')
     .replace(/['’]/g, '')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()

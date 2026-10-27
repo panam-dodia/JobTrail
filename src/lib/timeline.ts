@@ -30,7 +30,7 @@ export type ActivityChannel = 'yc' | 'linkedin' | 'email' | 'applied';
 export const ACTIVITY_CHANNELS: ActivityChannel[] = ['yc', 'linkedin', 'email', 'applied'];
 
 export type ActivityEntry =
-  | { kind: 'outreach'; at: number; record: Outreach }
+  | { kind: 'outreach'; at: number; record: Outreach; role?: Role }
   | { kind: 'application'; at: number; record: Application; role?: Role };
 
 /**
@@ -42,7 +42,7 @@ export function activity(outreach: Outreach[], applications: Application[], role
   const out: Record<ActivityChannel, ActivityEntry[]> = { yc: [], linkedin: [], email: [], applied: [] };
   for (const record of outreach) {
     const channel = record.channel === 'yc_message' ? 'yc' : record.channel === 'email' ? 'email' : 'linkedin';
-    out[channel].push({ kind: 'outreach', at: record.sentAt, record });
+    out[channel].push({ kind: 'outreach', at: record.sentAt, record, role: record.roleId ? rolesById.get(record.roleId) : undefined });
   }
   for (const record of applications) {
     out.applied.push({ kind: 'application', at: record.appliedAt, record, role: record.roleId ? rolesById.get(record.roleId) : undefined });

@@ -9,6 +9,7 @@ describe('normalizeName', () => {
     ['Acme Labs Inc', 'acme'],
     ['Scale AI', 'scale'],
     ['Acme HQ', 'acme'],
+    ['CloudCruise (YC W24)', 'cloudcruise'],
     ['Acme LLC', 'acme'],
     ['  Hugging   Face  ', 'hugging face'],
     ['Character.ai', 'character'],

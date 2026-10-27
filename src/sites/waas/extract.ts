@@ -49,6 +49,17 @@ export function extractWaas(doc: Document): PageFacts {
     }
   }
 
+  // Listed jobs: links to a job's page, named by the first link text that isn't a button.
+  const jobs = new Map<string, string>();
+  for (const { url, text, sameSite } of links) {
+    if (!(sameSite || hostIn(url.hostname, WAAS.companyHosts)) || !WAAS.jobPath.some((p) => p.test(url.pathname))) continue;
+    const key = url.origin + url.pathname;
+    const isTitle = text && text.length <= WAAS.maxJobTitleLength && !WAAS.notJobTitle.test(text);
+    if (!jobs.get(key)) jobs.set(key, isTitle ? text : '');
+  }
+  const listed = [...jobs].filter(([, title]) => title).map(([url, title]) => ({ title, url }));
+  if (listed.length) facts.listedRoles = listed;
+
   facts.sponsorship = findSponsorship(doc);
   facts.location = findLocation(doc);
   if (!facts.ats) delete facts.ats;

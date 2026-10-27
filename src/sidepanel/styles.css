@@ -503,11 +503,13 @@ select.pill {
   font-size: 11.5px;
   font-weight: 500;
 }
-select.sponsor-yes {
+select.sponsor-yes,
+.pill-static.sponsor-yes {
   background: var(--green-soft);
   color: var(--green);
 }
-select.sponsor-no {
+select.sponsor-no,
+.pill-static.sponsor-no {
   background: var(--red-soft);
   color: var(--red);
 }
@@ -594,15 +596,16 @@ select.sponsor-no {
   color: var(--faint);
   white-space: pre-wrap;
 }
+/* Always visible, in a light grey that darkens on hover. */
 .entry-actions {
   display: inline-flex;
   gap: 2px;
-  opacity: 0;
-  transition: opacity 0.12s;
 }
-.entry:hover .entry-actions,
-.entry-actions:focus-within {
-  opacity: 1;
+.entry-actions .icon-btn {
+  color: var(--faint);
+}
+.entry-actions .icon-btn:hover {
+  color: var(--red);
 }
 .icon-btn.edit {
   font-size: 13px;
@@ -842,4 +845,55 @@ select.status {
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+/* Section heading with an action on the right ("Roles   + Role"). */
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.list-row .entry-edit {
+  width: 100%;
+}
+
+/* This page: only the company details still missing, or a note that all are saved. */
+.missing {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius);
+}
+.all-saved {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.all-saved .ok {
+  color: var(--green, #16a34a);
+  font-weight: 600;
+}
+.pill-static {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 500;
+}
+
+/* Activity: "+ Add" under each channel's label. */
+.activity dt {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.add-btn {
+  font-size: 11.5px;
+  font-weight: 500;
 }

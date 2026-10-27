@@ -16,6 +16,8 @@ export interface PageFacts {
   personEmail?: string;
   profileUrl?: string;
   emailSubject?: string;
+  /** Jobs a company page lists, e.g. the "Jobs at CloudCruise" cards on WaaS. */
+  listedRoles?: { title: string; url: string }[];
   /** LinkedIn profiles: connected (1st), request pending, or neither. */
   connection?: 'connected' | 'pending' | 'none';
 }

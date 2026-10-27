@@ -73,6 +73,9 @@ export interface Outreach {
   personTitle?: string;
   profileUrl?: string;
   channel: OutreachChannel;
+  /** The role it was about, when known: a saved role, or a title read from the note. */
+  roleId?: number;
+  roleTitle?: string;
   sentAt: number;
   status: OutreachStatus;
   notes: string;

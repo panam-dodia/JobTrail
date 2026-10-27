@@ -134,3 +134,19 @@ describe('applyRepairs', () => {
     expect(await db.applications.where('companyId').equals(b).count()).toBe(1);
   });
 });
+
+describe('deleteRole', () => {
+  it('keeps the title on what referenced the role', async () => {
+    const { deleteRole } = await import('./repo');
+    const id = await createCompany({ name: 'CloudCruise' });
+    const roleId = await saveRole(id, { title: 'MTS', url: '', source: 'yc' });
+    const appId = await addApplication({ companyId: id, roleId, platform: 'yc', appliedAt: 1, status: 'applied', notes: '' });
+    const outId = await addOutreach({ companyId: id, roleId, personName: 'Felix', channel: 'linkedin_connection', sentAt: 1, status: 'sent', notes: '' });
+    await deleteRole(roleId);
+    expect(await db.roles.count()).toBe(0);
+    expect(await db.applications.get(appId)).toMatchObject({ roleTitle: 'MTS' });
+    expect((await db.applications.get(appId))?.roleId).toBeUndefined();
+    expect(await db.outreach.get(outId)).toMatchObject({ roleTitle: 'MTS' });
+    expect((await db.outreach.get(outId))?.roleId).toBeUndefined();
+  });
+});

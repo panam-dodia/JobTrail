@@ -7,6 +7,12 @@ export const WAAS = {
   companyPath: /^\/companies\/([a-z0-9][a-z0-9-]*)\/?$/i,
   companyHosts: ['workatastartup.com', 'ycombinator.com'],
 
+  /** A job's own page: workatastartup.com/jobs/123, ycombinator.com/companies/acme/jobs/abc-engineer. */
+  jobPath: [/^\/jobs\/\d+\/?$/, /^\/companies\/[^/]+\/jobs\/[^/]+\/?$/],
+  /** Buttons that link to a job but aren't its title. */
+  notJobTitle: /^(view job|apply( now)?|see (all )?jobs?|learn more)$/i,
+  maxJobTitleLength: 120,
+
   /** Short labels describing visa requirements, checked in order. */
   sponsorship: [
     { pattern: /us citizens?(hip)?\s*\/\s*visa only/i, value: 'no' },
