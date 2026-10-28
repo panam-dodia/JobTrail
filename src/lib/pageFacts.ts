@@ -23,6 +23,8 @@ export interface PageFacts {
 }
 
 export const PAGE_FACTS_MESSAGE = 'jobtrail:page-facts';
+/** A page reader saw the page change without a new URL (e.g. Connect → Pending); the panel reads it again. */
+export const PAGE_CHANGED_MESSAGE = 'jobtrail:page-changed';
 
 /** First Greenhouse/Lever/Ashby board linked from the page, if any. */
 export function findAtsLink(hrefs: string[]): AtsRef | undefined {

@@ -8,6 +8,7 @@ export interface TitleGuess {
 const SITE_SUFFIX = /\s+[·–—-]\s+(y combinator|work at a startup|linkedin|glassdoor[^-]*|greenhouse|lever|ashby)\s*$/i;
 /** "Stoa (S26)", "Stoa (YC W24)". */
 export const YC_BATCH = /\s*\((?:yc )?[swfx]\d{2,4}\)\s*$/i;
+const SITE_NAME = /^(y combinator|work at a startup|linkedin|glassdoor|greenhouse|lever|ashby|indeed|wellfound)\b/i;
 // "Careers at Stripe" names a company, not a role.
 const GENERIC_ROLE = /^(careers?|jobs?|open (roles|positions)|join us|work (with|at) us|life|working)$/i;
 
@@ -15,8 +16,9 @@ const GENERIC_ROLE = /^(careers?|jobs?|open (roles|positions)|join us|work (with
  * Pulls the company and role out of a job page title, e.g.
  * "Marketing at Stoa | Y Combinator's Work at a Startup" -> { company: 'Stoa', role: 'Marketing' }.
  * Only a guess for prefilling fields; the user confirms before anything is saved.
+ * On a page known to be a single job, "Applied AI Engineer | Magic Patterns" also counts.
  */
-export function parseJobTitle(raw?: string): TitleGuess {
+export function parseJobTitle(raw?: string, jobPage = false): TitleGuess {
   if (!raw) return {};
   // LinkedIn prefixes an unread count: "(3) Feed | LinkedIn".
   const parts = raw.replace(/\s+/g, ' ').replace(/^\(\d+\+?\) /, '').split(' | ').map((p) => p.trim());
@@ -42,6 +44,12 @@ export function parseJobTitle(raw?: string): TitleGuess {
   const atSign = lower.lastIndexOf(' @ ');
   const i = Math.max(at, atSign);
   if (i > 0) return clean(t.slice(0, i), t.slice(i + (i === atSign ? 3 : 4)));
+
+  // "Role | Company", "Role — Company": only trusted on a job page, where the first part is the job.
+  if (jobPage) {
+    const [role, company] = parts.length >= 2 ? [t, parts[1]] : t.split(/\s[–—]\s/);
+    if (role && company && !SITE_NAME.test(company)) return clean(role, company);
+  }
   return {};
 }
 

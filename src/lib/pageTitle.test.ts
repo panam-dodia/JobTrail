@@ -43,3 +43,12 @@ describe('parseJobTitle', () => {
     expect(parseJobTitle(undefined)).toEqual({});
   });
 });
+
+describe('parseJobTitle on a job page', () => {
+  it('reads "Role | Company" and "Role — Company" only when the page is a job', () => {
+    expect(parseJobTitle('Applied AI Engineer | Magic Patterns', true)).toEqual({ company: 'Magic Patterns', role: 'Applied AI Engineer' });
+    expect(parseJobTitle('Applied AI Engineer — Magic Patterns', true)).toEqual({ company: 'Magic Patterns', role: 'Applied AI Engineer' });
+    expect(parseJobTitle('Applied AI Engineer | Magic Patterns')).toEqual({});
+    expect(parseJobTitle('Careers | Magic Patterns', true)).toEqual({ company: 'Magic Patterns' });
+  });
+});

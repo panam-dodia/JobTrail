@@ -46,6 +46,16 @@ export const LINKEDIN = {
     pending: /^pending\b/i,
     firstDegree: /(^|·\s*)1st$/,
     minHeadlineLength: 12,
+    /** The profile's top card; its company links are the person's own (the sidebar's are others'). */
+    topCard: 'section',
+    /** "(YC W24)" after a company name, and a headline part that is only a batch: "YC W24", "W24". */
+    ycBatch: /\s*\(\s*YC\s+[A-Z][a-z]*\s*'?\d{2,4}\s*\)/i,
+    batchOnly: /^(YC\s+)?[WSFX]\d{2}$/i,
+    /** A headline part that reads as a job, not a tagline ("Building Trusted AI for Banks"). */
+    jobWord:
+      /\b(co-?founder|founder|ceo|cto|coo|cpo|cfo|chief|head|director|vp|president|engineer|engineering|developer|manager|lead|recruiter|recruiting|talent|scientist|researcher|designer|partner|principal|architect|analyst|consultant|intern|staff|mts|product|sales|marketing|operations)\b/i,
+    /** A headline part that is a company's domain: "Shiboleth.ai". */
+    companyLike: /^[\w-]+\.(ai|io|com|co|dev|so|app|xyz|tech|inc|health|bio)$/i,
   },
 
   /** The connection invite dialog ("Add a note to your invitation?"). */
@@ -65,6 +75,8 @@ export const LINKEDIN = {
     name: ['.msg-entity-lockup__entity-title', '.msg-thread__link-to-profile', '.msg-overlay-bubble-header__title'],
     headline: ['.msg-entity-lockup__entity-info'],
     profileLink: ['a.msg-thread__link-to-profile', '.msg-entity-lockup a[href*="/in/"]'],
+    /** Message texts in the open conversation, oldest first. */
+    body: ['.msg-s-event-listitem__body', '.msg-s-message-list p'],
   },
   maxNameLength: 80,
 };

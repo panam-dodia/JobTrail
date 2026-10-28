@@ -28,8 +28,19 @@ describe('detectPageKind', () => {
     ['https://www.glassdoor.com/job-listing/engineer-acme-JV_123.htm', 'job'],
     ['https://www.glassdoor.com/Overview/Working-at-Acme-EI_IE1.htm', 'company'],
     ['https://mail.google.com/mail/u/0/#inbox/FMfcgz', 'email'],
-    ['https://www.acme.com/careers', 'other'],
+    ['https://www.acme.com/careers', 'company'],
+    ['https://www.acme.com/pricing', 'other'],
   ])('%s is a %s page', (url, expected) => {
     expect(kind(url)).toBe(expected);
+  });
+});
+
+describe('detectPageKind on company sites', () => {
+  it('finds job and careers pages', () => {
+    const kind = (u: string) => detectPageKind(parsePageContext(u));
+    expect(kind('https://www.magicpatterns.com/careers/applied-ai-engineer?ashby_jid=7e40')).toBe('job');
+    expect(kind('https://acme.com/about?gh_jid=123')).toBe('job');
+    expect(kind('https://acme.com/careers')).toBe('company');
+    expect(kind('https://acme.com/pricing')).toBe('other');
   });
 });

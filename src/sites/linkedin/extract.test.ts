@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from 'vitest';
-import { extractLinkedIn } from './extract';
+import { extractLinkedIn, splitHeadline } from './extract';
 
 function page(html: string, title = ''): Document {
   document.title = title;
@@ -113,12 +113,46 @@ describe('extractLinkedIn', () => {
       </main>`;
     expect(extractLinkedIn(page(html, 'Lorenss Martinsons | LinkedIn'), 'https://www.linkedin.com/in/lorenss/')).toEqual({
       personName: 'Lorenss Martinsons',
-      personTitle: "Building AI data infrastructure - we're hiring!",
       companyName: 'HUD',
       location: 'San Francisco, California, United States',
       profileUrl: 'https://www.linkedin.com/in/lorenss/',
       connection: 'connected',
     });
+  });
+
+  it('reads a profile whose company is only a link in the top card', () => {
+    // Bivu's profile: no "Current company" label; the headline is batch | company | tagline.
+    const html = `
+      <main>
+        <section>
+          <div><h1>Bivu Dhungana</h1> <span>He/Him</span> <span>· 2nd</span></div>
+          <div class="text-body-medium break-words">YC W24 | Shiboleth.ai | Building Trusted AI for Banks &amp; BaaS Compliance | AI Research</div>
+          <div><span>San Francisco, California, United States</span></div>
+          <ul>
+            <li><a href="https://www.linkedin.com/company/shiboleth/"><img alt=""><span>Shiboleth.ai (YC W24)</span></a></li>
+            <li><a href="https://www.linkedin.com/company/y-combinator/"><span>Y Combinator</span></a></li>
+          </ul>
+          <button>Message</button><button aria-label="Pending, click to withdraw invitation sent to Bivu Dhungana">Pending</button>
+        </section>
+        <aside><a href="https://www.linkedin.com/company/ourworld/">Our World Energy</a></aside>
+      </main>`;
+    expect(extractLinkedIn(page(html, 'Bivu Dhungana | LinkedIn'), 'https://www.linkedin.com/in/bivu-dhungana/')).toEqual({
+      personName: 'Bivu Dhungana',
+      companyName: 'Shiboleth.ai',
+      location: 'San Francisco, California, United States',
+      profileUrl: 'https://www.linkedin.com/in/bivu-dhungana/',
+      connection: 'pending',
+    });
+  });
+
+  it('splits headlines without taking batches or taglines for a title', () => {
+    expect(splitHeadline('YC W24 | Shiboleth.ai | Building Trusted AI for Banks & BaaS Compliance')).toEqual({ company: 'Shiboleth.ai' });
+    expect(splitHeadline('CEO and Co-founder at Shiboleth.ai (YC W24) - Hiring for positions in SF!')).toEqual({
+      title: 'CEO and Co-founder',
+      company: 'Shiboleth.ai',
+    });
+    expect(splitHeadline('W24 | Founding Engineer | acme.dev')).toEqual({ title: 'Founding Engineer', company: 'acme.dev' });
+    expect(splitHeadline('Building AI data infrastructure | Cognitive Science @ Yale')).toEqual({});
   });
 
   it('sees a pending connection request', () => {
@@ -151,6 +185,19 @@ describe('extractLinkedIn', () => {
       personTitle: 'Engineering Manager',
       companyName: 'AssemblyAI',
       profileUrl: 'https://www.linkedin.com/in/chrismarty/',
+    });
+  });
+
+  it('reads the role a message thread is about', () => {
+    const html = `
+      <div class="msg-entity-lockup"><h2 class="msg-entity-lockup__entity-title">Felix Eckert</h2></div>
+      <ul class="msg-s-message-list">
+        <li><div class="msg-s-event-listitem__body">Hi Felix, I feel I'm a strong fit for the MTS role.</div></li>
+        <li><div class="msg-s-event-listitem__body">Thanks! Happy to chat.</div></li>
+      </ul>`;
+    expect(extractLinkedIn(page(html), 'https://www.linkedin.com/messaging/thread/2-abc/')).toMatchObject({
+      personName: 'Felix Eckert',
+      roleTitle: 'MTS',
     });
   });
 });

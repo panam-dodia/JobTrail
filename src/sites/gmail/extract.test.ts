@@ -71,6 +71,47 @@ describe('extractGmail', () => {
     expect(companyFromDomain('getty.com')).toBe('getty');
     expect(companyFromDomain('openai.com')).toBe('openai');
     expect(companyFromDomain('google.com')).toBe('google');
+    expect(companyFromDomain('heliosinc.ai')).toBe('helios');
+    expect(companyFromDomain('zinc.com')).toBe('zinc');
+    expect(companyFromDomain('steam.com')).toBe('steam');
+  });
+
+  it('names a shared inbox and its company from the greeting', () => {
+    // The Helios email: sent to hello@heliosinc.ai, opening "Hi Helios team,".
+    const html = `
+      <h2 class="hP">What I'm proudest of building: Panam Dodia</h2>
+      <div class="gs">
+        <span class="gD" email="panamdodia945@gmail.com" name="Panam Dodia">Panam Dodia</span>
+        <span class="hb">to <span class="g2" email="hello@heliosinc.ai" name="hello">hello</span></span>
+        <div class="a3s">Hi Helios team,<br><br>Your line about health reports is the exact problem behind my build.</div>
+      </div>`;
+    expect(extractGmail(page(html, 'Sent - panamdodia945@gmail.com - Gmail'))).toEqual({
+      personName: 'Helios team',
+      personEmail: 'hello@heliosinc.ai',
+      emailSubject: "What I'm proudest of building: Panam Dodia",
+      domain: 'heliosinc.ai',
+      companyName: 'Helios',
+    });
+  });
+
+  it('falls back to "<company> team" for a shared inbox with no greeting', () => {
+    const html = '<span class="g2" email="jobs@acmelabs.com" name="jobs@acmelabs.com">jobs@acmelabs.com</span>';
+    expect(extractGmail(page(html))).toMatchObject({ personName: 'Acme team', companyName: 'Acme' });
+  });
+
+  it('reads the role the email is about', () => {
+    const html = `${THREAD}<div class="a3s">Hi Dylan, I'm writing about the Forward Deployed Engineer role.</div>`;
+    expect(extractGmail(page(html))).toMatchObject({ personName: 'Dylan Fox', roleTitle: 'Forward Deployed Engineer' });
+  });
+
+  it('reads the role from a draft being written', () => {
+    const html = `
+      <div role="dialog">
+        <div data-hovercard-id="careers@ultra.ai"><span>careers@ultra.ai</span></div>
+        <input name="subjectbox" value="Application">
+        <div contenteditable="true" role="textbox">Hi Ultra team,<br>I'd love to be considered for your Product Engineer position.</div>
+      </div>`;
+    expect(extractGmail(page(html))).toMatchObject({ personName: 'Ultra team', companyName: 'Ultra', roleTitle: 'Product Engineer' });
   });
 
   it('returns nothing in the inbox list', () => {

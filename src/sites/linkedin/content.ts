@@ -1,5 +1,5 @@
 import { LOG_CAPTURE_MESSAGE, OPEN_PANEL_MESSAGE, UNDO_CAPTURE_MESSAGE, type CaptureResult, type CapturedOutreach } from '../../lib/messages';
-import { PAGE_FACTS_MESSAGE } from '../../lib/pageFacts';
+import { PAGE_CHANGED_MESSAGE, PAGE_FACTS_MESSAGE } from '../../lib/pageFacts';
 import { isCurrent } from '../../lib/runtime';
 import { showToast } from '../../lib/toast';
 import { watchConnectionRequests } from './capture';
@@ -67,5 +67,7 @@ function report(captured: CapturedOutreach, result: CaptureResult): void {
 // A copy left over from before JobTrail was reloaded stays silent; the fresh copy handles it.
 watchConnectionRequests(async (captured) => {
   if (!isCurrent()) return;
+  // The profile now says Pending; the side panel reads it again.
+  void chrome.runtime.sendMessage({ type: PAGE_CHANGED_MESSAGE }).catch(() => {});
   report(captured, await log(captured));
 });

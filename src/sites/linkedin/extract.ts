@@ -1,3 +1,4 @@
+import { roleFromNote } from '../../lib/noteRole';
 import type { PageFacts } from '../../lib/pageFacts';
 import { LINKEDIN } from './selectors';
 
@@ -81,11 +82,25 @@ const firstText = (root: ParentNode, selectors: string[]) => {
   return '';
 };
 
-/** "Founding Engineer at AssemblyAI | ex-Google" -> title and company. */
+/** "Shiboleth.ai (YC W24) - Hiring in SF!" -> "Shiboleth.ai". */
+const companyOnly = (s: string) => clean(s.split(/\s[-–—]\s/)[0]?.replace(LINKEDIN.profile.ycBatch, ''));
+
+/**
+ * "Founding Engineer at AssemblyAI | ex-Google" -> title and company.
+ * "YC W24 | Shiboleth.ai | Building Trusted AI" -> company only: a part counts as a title only
+ * when it has a job word, so taglines and batches aren't taken for one.
+ */
 export function splitHeadline(headline: string): { title?: string; company?: string } {
-  const first = clean(headline.split(/\s[|•·]\s/)[0]);
-  const m = first.match(/^(.+?)\s+(?:at|@)\s+(.+)$/i);
-  return m ? { title: clean(m[1]), company: clean(m[2]) } : first ? { title: first } : {};
+  const P = LINKEDIN.profile;
+  const parts = headline
+    .split(/\s[|•·]\s/)
+    .map(clean)
+    .filter((p) => p && !P.batchOnly.test(p));
+  const m = parts[0]?.match(/^(.+?)\s+(?:at|@)\s+(.+)$/i);
+  if (m) return { title: clean(m[1]), company: companyOnly(m[2] ?? '') };
+  const title = parts.find((p) => P.jobWord.test(p));
+  const company = parts.find((p) => P.companyLike.test(p));
+  return { ...(title && { title }), ...(company && { company: companyOnly(company) }) };
 }
 
 function personFacts(name: string, headline: string, company?: string): PageFacts {
@@ -109,13 +124,24 @@ function extractProfile(doc: Document, profileUrl: string): PageFacts {
   const header = (nameEl && profileHeader(nameEl)) ?? doc.querySelector('main') ?? doc.body;
 
   const label = header.querySelector(P.currentCompany)?.getAttribute('aria-label') ?? '';
-  const company = clean(label.match(P.currentCompanyLabel)?.[1]);
+  const company = clean(label.match(P.currentCompanyLabel)?.[1]) || topCardCompany(nameEl);
   const headline = firstText(header, P.headline) || headlineAfter(header, name, nameEl);
   const facts = personFacts(name, headline, company);
   if (!facts.personName) return facts;
 
   const location = findLocation(header, nameEl);
   return { ...facts, ...(location && { location }), profileUrl, connection: connectionState(header) };
+}
+
+/** The first company link in the profile's own top card ("Shiboleth.ai (YC W24)"), not the sidebar's. */
+function topCardCompany(nameEl?: Element): string {
+  const card = nameEl?.closest(LINKEDIN.profile.topCard);
+  if (!card) return '';
+  for (const a of Array.from(card.querySelectorAll(LINKEDIN.companyLink))) {
+    const text = companyOnly(clean(a.textContent));
+    if (text && text.length <= LINKEDIN.maxNameLength) return text;
+  }
+  return '';
 }
 
 /** The nearest block around the name that also holds the profile's action buttons. */
@@ -156,6 +182,15 @@ function connectionState(header: Element): PageFacts['connection'] {
 
 function extractMessaging(doc: Document): PageFacts {
   const facts = personFacts(firstText(doc, LINKEDIN.messaging.name), firstText(doc, LINKEDIN.messaging.headline));
+  // The role the conversation is about ("…a strong fit for the MTS role"), newest message first.
+  for (const s of LINKEDIN.messaging.body) {
+    const texts = Array.from(doc.querySelectorAll(s)).map((el) => clean(el.textContent)).filter(Boolean).reverse();
+    const role = texts.map((t) => roleFromNote(t).roleTitle).find(Boolean);
+    if (role) {
+      facts.roleTitle = role;
+      break;
+    }
+  }
   for (const s of LINKEDIN.messaging.profileLink) {
     const href = doc.querySelector(s)?.getAttribute('href');
     const slug = href?.match(/\/in\/([^/?#]+)/)?.[1];

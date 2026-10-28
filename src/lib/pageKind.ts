@@ -1,3 +1,4 @@
+import { jobRefFromUrl } from './atsJob';
 import type { PageContext } from './pageContext';
 
 export type PageKind = 'job' | 'company' | 'profile' | 'messages' | 'email' | 'other';
@@ -17,6 +18,8 @@ export const isPersonKind = (k: PageKind) => k === 'profile' || k === 'messages'
 const MESSAGES_PATH = /messag|inbox|conversation/;
 // Last path parts that are listings, not a single job: ats.rippling.com/acme/jobs.
 const LISTING_PARTS = new Set(['jobs', 'careers', 'openings', 'positions']);
+// Company sites: a careers section, with a single job below it (acme.com/careers/backend-engineer).
+const CAREERS_DIRS = new Set(['careers', 'career', 'jobs', 'job', 'openings', 'positions', 'open-positions', 'roles', 'join-us']);
 
 /** What kind of page this is, from its address alone. */
 export function detectPageKind(ctx?: PageContext): PageKind {
@@ -49,8 +52,12 @@ export function detectPageKind(ctx?: PageContext): PageKind {
       if (/^\/(job-listing|job)\b/.test(path)) return 'job';
       if (/^\/(overview|reviews)\b/.test(path)) return 'company';
       return 'other';
-    case 'other':
-      return 'other';
+    case 'other': {
+      if (jobRefFromUrl(ctx.url)) return 'job';
+      const at = parts.findIndex((p) => CAREERS_DIRS.has(p));
+      if (at < 0) return 'other';
+      return parts[at + 1] ? 'job' : 'company';
+    }
     default: {
       // Hosted job boards: a single job sits below the company's board (jobs.gem.com/ultra/<id>,
       // app.dover.com/apply/acme/<id>); the board itself is a listing. Embedded Greenhouse jobs carry ?gh_jid=.

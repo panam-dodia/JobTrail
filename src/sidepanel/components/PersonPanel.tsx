@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useRef, useState } from 'react';
-import { addOutreach, createCompany, findOutreachByPerson, linkPageToCompany, updateOutreach } from '../../db/repo';
+import { addOutreach, createCompany, findOutreachByPerson, findRole, linkPageToCompany, updateOutreach } from '../../db/repo';
 import { OUTREACH_CHANNELS, OUTREACH_STATUSES, type Company, type OutreachChannel, type OutreachStatus } from '../../db/types';
 import { displayName, splitNames } from '../../lib/companyName';
 import { matchByName } from '../../lib/match';
@@ -113,6 +113,7 @@ function PersonForm({ facts, ctx, contact, companies, company, onLogged }: Props
   const [name, setName] = useState(facts.personName ?? '');
   const [title, setTitle] = useState(facts.personTitle ?? '');
   const [companyName, setCompanyName] = useState(facts.companyName ?? '');
+  const [about, setAbout] = useState(facts.roleTitle ?? '');
   const [channel, setChannel] = useState<OutreachChannel>(defaultChannel(ctx));
   const [status, setStatus] = useState<OutreachStatus>(facts.connection === 'connected' ? 'accepted' : 'sent');
   const [notes, setNotes] = useState(facts.emailSubject ? `Subject: ${facts.emailSubject}` : '');
@@ -137,7 +138,7 @@ function PersonForm({ facts, ctx, contact, companies, company, onLogged }: Props
     touched.current.add(field);
     set(v);
   };
-  const live = JSON.stringify([facts.personName, facts.personTitle, facts.companyName, facts.connection]);
+  const live = JSON.stringify([facts.personName, facts.personTitle, facts.companyName, facts.roleTitle, facts.connection]);
   useEffect(() => {
     const follow = <T,>(field: string, set: (v: T) => void, v: T | undefined) => {
       if (v && !touched.current.has(field)) set(v);
@@ -145,6 +146,7 @@ function PersonForm({ facts, ctx, contact, companies, company, onLogged }: Props
     follow('name', setName, facts.personName);
     follow('title', setTitle, facts.personTitle);
     follow('company', setCompanyName, facts.companyName);
+    follow('about', setAbout, facts.roleTitle);
     if (facts.connection === 'connected') follow<OutreachStatus>('status', setStatus, 'accepted');
     // Only re-run when the page's facts change.
   }, [live]);
@@ -171,7 +173,7 @@ function PersonForm({ facts, ctx, contact, companies, company, onLogged }: Props
       sentAt: Date.now(),
       status,
       notes: notes.trim(),
-      ...roleFromNote(notes, await db.roles.where('companyId').equals(id).toArray()),
+      ...(await aboutRole(id, about, notes)),
     });
     if (draft) await chrome.storage.session.remove(draft).catch(() => {});
     onLogged(id);
@@ -230,6 +232,10 @@ function PersonForm({ facts, ctx, contact, companies, company, onLogged }: Props
           <input value={companyName} onChange={(e) => typed('company', setCompanyName)(e.target.value)} />
         </label>
       )}
+      <label>
+        About role <span className="muted">(blank: read from the notes)</span>
+        <input value={about} onChange={(e) => typed('about', setAbout)(e.target.value)} />
+      </label>
       <div className="row">
         <label className="grow">
           Channel
@@ -264,4 +270,14 @@ function PersonForm({ facts, ctx, contact, companies, company, onLogged }: Props
       </div>
     </form>
   );
+}
+
+/** The role outreach is about: the one typed or read off the page (linked if saved), else one named in the notes. */
+async function aboutRole(companyId: number, title: string, notes: string) {
+  const t = title.trim();
+  if (t) {
+    const saved = await findRole(companyId, t);
+    return saved ? { roleId: saved.id } : { roleTitle: t };
+  }
+  return roleFromNote(notes, await db.roles.where('companyId').equals(companyId).toArray());
 }
